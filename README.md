@@ -50,21 +50,39 @@ Urban-Leaf-Health-Monitoring is an end-to-end system for tracking urban vegetati
 
 ### Phase 1: Data Engineering
 
-- [ ] Data Collection: 1,000+ raw images (cloud-masked)
-- [ ] Augmentation: 5,000+ samples via flipping, zooming, restoration
-- [ ] Preprocessing: Radiometric normalization, scaling, multispectral transformation
+- [x] Data Collection: sampled RGB datasets plus Hasdeo all-band GeoTIFF export manifests
+- [x] Preprocessing: cloud QC, valid-pixel filtering, patch extraction, radiometric normalization
+- [x] Augmentation: multi-band spatial and spectral augmentation pipeline
+- [ ] Full local sync of all exported 1,000+ Hasdeo GeoTIFF files
 
 ### Phase 2: Core Analytics
 
-- [ ] Feature Engineering: GLCM texture, spectral stats, morphology
-- [ ] Spectral Indices: NDVI, EVI, SAVI
-- [ ] Modeling: SVM, Random Forest, U-Net
+- [x] Spectral Indices: NDVI, EVI, SAVI, BSI, NBR and related land-cover indicators
+- [x] Baseline Modeling: Random Forest exploration and Attention U-Net implementation
+- [x] Training Pipeline: AMP, checkpointing, resume support, class distribution report
+- [ ] Final supervised masks and production-grade benchmark metrics
 
 ### Phase 3: Temporal & Event Analysis
 
-- [ ] Event Comparison: March–April 2022 Hasdeo events
-- [ ] Time-Lapse Visualization: 5-year change detection
-- [ ] Urban Metrics: Feature visualization for city planning
+- [x] Event Comparison: Hasdeo event windows including March–April 2022 degradation signals
+- [x] Time-Series Export: monthly/seasonal Hasdeo exports across pre-event, event, and post-event phases
+- [x] Inference Outputs: segmentation masks, overlays, GeoTIFF masks, and JSON summaries
+- [ ] Final dashboard / web application layer
+
+## Current Completion Status
+
+The non-web research pipeline is now close to complete as a reproducible prototype:
+
+1. Select and verify study regions.
+2. Export cloud-filtered satellite data from Google Earth Engine.
+3. Convert and catalog imagery for inspection.
+4. Build spectral-index feature tables for event and year-wise comparison.
+5. Preprocess multispectral GeoTIFFs into normalized training patches.
+6. Augment patches for model robustness.
+7. Train an Attention U-Net segmentation model on H100.
+8. Generate inference masks, overlays, GeoTIFF outputs, and class-ratio summaries.
+
+The remaining scientific gap is not code structure; it is data quality: replacing pseudo-labels with expert/manual masks and recording final benchmark metrics on held-out ground truth.
 
 ## Quick Start
 
@@ -80,6 +98,29 @@ Urban-Leaf-Health-Monitoring is an end-to-end system for tracking urban vegetati
 git clone https://github.com/Manjushwarofficial/Urban-Leaf-Health-Monitoring.git
 cd Urban-Leaf-Health-Monitoring
 pip install -r requirements.txt
+```
+
+### HPC Pipeline
+
+```bash
+cd h100_config
+bash setup_env.sh
+qsub job_cpu.pbs
+qsub job_gpu.pbs
+```
+
+Manual training and inference:
+
+```bash
+python 05_train.py \
+  --data-dir /Data/username/urban_tree_project/augmented \
+  --model-dir /Data/username/urban_tree_project/models \
+  --results-dir /Data/username/urban_tree_project/results
+
+python 06_predict_visualize.py \
+  --checkpoint /Data/username/urban_tree_project/models/best_model.pth \
+  --input /Data/username/urban_tree_project/processed \
+  --output-dir /Data/username/urban_tree_project/results/inference_preview
 ```
 
 ## Evaluation Metrics
