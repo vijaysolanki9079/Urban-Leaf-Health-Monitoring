@@ -7,12 +7,17 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   CalendarRange,
+  Cpu,
   Database,
+  FileCheck2,
   GitBranch,
   Image as ImageIcon,
+  Layers3,
+  LineChart,
   MapPinned,
   RefreshCcw,
   Search,
+  ShieldCheck,
   SlidersHorizontal,
   Sparkles,
   SquareStack,
@@ -72,6 +77,20 @@ type ModelResults = {
   summaries: Array<{ name: string; path: string; data: Record<string, { name: string; pixels: number; ratio: number }> }>;
   masks: Array<{ name: string; path: string }>;
   overlays: Array<{ name: string; path: string }>;
+  expectedArtifacts?: string[];
+  runbook?: {
+    script: string;
+    purpose: string;
+    example: string;
+  };
+};
+
+type SignalCard = {
+  key: string;
+  label: string;
+  value: string;
+  tone: "good" | "watch" | "risk" | "neutral";
+  detail: string;
 };
 
 function assetUrl(image?: ImageRecord) {
@@ -96,6 +115,80 @@ function featureTone(feature: FeatureKey, delta: number | null) {
       : `${FEATURE_LABELS[feature]} ${direction}; this can indicate reduced disturbance pressure.`;
   }
   return `${FEATURE_LABELS[feature]} ${direction} across the selected window.`;
+}
+
+function metricDelta(before?: FeatureRecord, after?: FeatureRecord, key?: FeatureKey) {
+  if (!before || !after || !key) return null;
+  const beforeValue = before[key];
+  const afterValue = after[key];
+  return typeof beforeValue === "number" && typeof afterValue === "number" ? afterValue - beforeValue : null;
+}
+
+function formatDelta(value: number | null, digits = 2) {
+  if (value === null) return "n/a";
+  return `${value >= 0 ? "+" : ""}${value.toFixed(digits)}`;
+}
+
+function buildSignalCards(data: CompareResponse | null): SignalCard[] {
+  const ndvi = metricDelta(data?.before, data?.after, "NDVI");
+  const canopy = metricDelta(data?.before, data?.after, "canopy_cover_pct");
+  const heat = metricDelta(data?.before, data?.after, "LST_celsius");
+  const urban = metricDelta(data?.before, data?.after, "NDBI");
+  const soil = metricDelta(data?.before, data?.after, "BSI");
+  const water = metricDelta(data?.before, data?.after, "NDWI");
+
+  return [
+    {
+      key: "vegetation",
+      label: "Vegetation health",
+      value: formatDelta(ndvi, 3),
+      tone: ndvi === null ? "neutral" : ndvi >= 0 ? "good" : ndvi > -0.04 ? "watch" : "risk",
+      detail: ndvi === null ? "No NDVI comparison available." : "NDVI change across the selected timeline."
+    },
+    {
+      key: "canopy",
+      label: "Canopy condition",
+      value: formatDelta(canopy, 2),
+      tone: canopy === null ? "neutral" : canopy >= 0 ? "good" : canopy > -5 ? "watch" : "risk",
+      detail: canopy === null ? "No canopy estimate available." : "Estimated canopy cover shift from the feature table."
+    },
+    {
+      key: "heat",
+      label: "Heat pressure",
+      value: formatDelta(heat, 2),
+      tone: heat === null ? "neutral" : heat <= 0 ? "good" : heat < 2 ? "watch" : "risk",
+      detail: heat === null ? "No LST comparison available." : "Land surface temperature delta in Celsius."
+    },
+    {
+      key: "urban",
+      label: "Built-up pressure",
+      value: formatDelta(urban, 3),
+      tone: urban === null ? "neutral" : urban <= 0 ? "good" : urban < 0.04 ? "watch" : "risk",
+      detail: urban === null ? "No NDBI comparison available." : "NDBI captures built-up intensity in the selected period."
+    },
+    {
+      key: "soil",
+      label: "Bare-soil exposure",
+      value: formatDelta(soil, 3),
+      tone: soil === null ? "neutral" : soil <= 0 ? "good" : soil < 0.05 ? "watch" : "risk",
+      detail: soil === null ? "No BSI comparison available." : "Bare Soil Index highlights exposed or disturbed ground."
+    },
+    {
+      key: "water",
+      label: "Moisture signal",
+      value: formatDelta(water, 3),
+      tone: water === null ? "neutral" : water >= 0 ? "good" : water > -0.04 ? "watch" : "risk",
+      detail: water === null ? "No NDWI comparison available." : "NDWI change helps explain vegetation stress."
+    }
+  ];
+}
+
+function assessmentText(cards: SignalCard[]) {
+  const riskCount = cards.filter((card) => card.tone === "risk").length;
+  const watchCount = cards.filter((card) => card.tone === "watch").length;
+  if (riskCount >= 2) return "High-change window: multiple signals indicate canopy stress, heat, bare soil, or built-up pressure.";
+  if (riskCount || watchCount >= 2) return "Watch window: the selected timeline shows early warning signals that deserve inspection.";
+  return "Stable or improving window: the selected indicators do not show broad degradation pressure.";
 }
 
 function Chart({ rows, feature }: { rows: FeatureRecord[]; feature: FeatureKey }) {
@@ -185,18 +278,128 @@ function MiniFeatureChart({ rows, feature }: { rows: FeatureRecord[]; feature: F
   );
 }
 
+function AnalysisSummary({ cards, region, from, to }: { cards: SignalCard[]; region?: string; from: string; to: string }) {
+  return (
+    <section className="surface intelligence-surface">
+      <div className="surface-head">
+        <div>
+          <h2>Monitoring intelligence</h2>
+          <p className="muted">
+            Parameter-driven assessment for {region ?? "selected region"} from {from} to {to}.
+          </p>
+        </div>
+        <span className="badge insight-badge">
+          <ShieldCheck size={14} aria-hidden />
+          No upload required
+        </span>
+      </div>
+      <div className="assessment-strip">
+        <LineChart size={20} aria-hidden />
+        <strong>{assessmentText(cards)}</strong>
+      </div>
+      <div className="signal-grid">
+        {cards.map((card) => (
+          <article className={`signal-card ${card.tone}`} key={card.key}>
+            <span>{card.label}</span>
+            <strong>{card.value}</strong>
+            <p>{card.detail}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function PipelinePanel({ modelResults }: { modelResults: ModelResults | null }) {
+  const steps = [
+    {
+      title: "Curated satellite archive",
+      body: "The user selects a region and timeline from prepared monthly scenes and feature tables.",
+      icon: Database
+    },
+    {
+      title: "Feature comparison API",
+      body: "The backend returns vegetation, canopy, water, soil, built-up, and thermal signals for that window.",
+      icon: Layers3
+    },
+    {
+      title: "Model artifact bridge",
+      body: modelResults?.hasInference
+        ? "Inference artifacts are available and can be shown beside the feature timelines."
+        : "The dashboard is waiting for checkpoint inference masks, overlays, and class summaries.",
+      icon: Cpu
+    },
+    {
+      title: "Decision dashboard",
+      body: "The UI presents before/after imagery, trend charts, risk signals, and model outputs in one workflow.",
+      icon: FileCheck2
+    }
+  ];
+
+  return (
+    <section className="surface pipeline-surface">
+      <div className="surface-head">
+        <div>
+          <h2>How this system works</h2>
+          <p className="muted">This is a timeline-monitoring product, not a random image upload demo.</p>
+        </div>
+      </div>
+      <div className="pipeline-grid">
+        {steps.map((step, index) => {
+          const Icon = step.icon;
+          return (
+            <article className="pipeline-step" key={step.title}>
+              <div>
+                <Icon size={18} aria-hidden />
+                <span>{String(index + 1).padStart(2, "0")}</span>
+              </div>
+              <strong>{step.title}</strong>
+              <p>{step.body}</p>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function ModelResultsPanel({ modelResults }: { modelResults: ModelResults | null }) {
   const latestSummary = modelResults?.summaries[0];
+  const latestEpoch = modelResults?.trainingHistory?.at(-1);
   return (
     <section className="surface model-surface">
       <div className="surface-head">
         <div>
           <h2>Model output lane</h2>
-          <p className="muted">Segmentation masks and class ratios appear here after the trained model runs inference.</p>
+          <p className="muted">Segmentation masks, overlays, and class ratios appear here after curated-scene inference.</p>
         </div>
         <span className={modelResults?.hasInference ? "badge success-badge" : "badge warning-badge"}>
           {modelResults?.hasInference ? "Inference ready" : "Awaiting inference"}
         </span>
+      </div>
+
+      <div className="model-status-grid">
+        <div>
+          <span>Checkpoint</span>
+          <strong>{modelResults?.hasModel ? "Detected" : "Missing"}</strong>
+          <small>{modelResults?.modelPath ?? "Expected under results/ or h100_config/results/"}</small>
+        </div>
+        <div>
+          <span>Inference artifacts</span>
+          <strong>{modelResults?.hasInference ? "Detected" : "Missing"}</strong>
+          <small>{modelResults ? `${modelResults.masks.length} masks, ${modelResults.overlays.length} overlays` : "No artifact scan available"}</small>
+        </div>
+        <div>
+          <span>Latest validation</span>
+          <strong>
+            {latestEpoch?.val_iou !== undefined
+              ? `${(latestEpoch.val_iou * 100).toFixed(1)}% IoU`
+              : latestEpoch?.val_acc !== undefined
+                ? `${(latestEpoch.val_acc * 100).toFixed(1)}% acc`
+                : "n/a"}
+          </strong>
+          <small>{latestEpoch ? `epoch ${latestEpoch.epoch}` : "Training history not found"}</small>
+        </div>
       </div>
 
       {modelResults?.hasInference && latestSummary ? (
@@ -230,10 +433,11 @@ function ModelResultsPanel({ modelResults }: { modelResults: ModelResults | null
           <div>
             <strong>No model inference results found in this repo yet.</strong>
             <p>
-              The current graphs use GEE/CSV feature data. To show model working behind the website, run
-              <code> h100_config/06_predict_visualize.py </code>
-              with a trained checkpoint. Its masks, overlays, and summaries will be picked up here.
+              The current graphs use curated GEE/CSV feature data. To show the trained model working behind the
+              website, run <code> {modelResults?.runbook?.script ?? "h100_config/06_predict_visualize.py"} </code>
+              on selected scenes. The API will pick up masks, overlays, and JSON summaries automatically.
             </p>
+            {modelResults?.runbook?.example ? <code className="run-command">{modelResults.runbook.example}</code> : null}
           </div>
         </div>
       )}
@@ -282,6 +486,7 @@ export default function TimelineDashboard({ regions, featureKeys }: Props) {
     beforeValue !== undefined && afterValue !== undefined && beforeValue !== 0
       ? ((afterValue - beforeValue) / Math.abs(beforeValue)) * 100
       : null;
+  const signalCards = buildSignalCards(data);
 
   return (
     <main className="page">
@@ -458,6 +663,8 @@ export default function TimelineDashboard({ regions, featureKeys }: Props) {
             </div>
           </div>
 
+          <AnalysisSummary cards={signalCards} region={selectedRegion?.label} from={from} to={to} />
+
           <section className="surface chart-surface">
             <div className="surface-head">
               <div>
@@ -498,6 +705,8 @@ export default function TimelineDashboard({ regions, featureKeys }: Props) {
               })}
             </div>
           </section>
+
+          <PipelinePanel modelResults={modelResults} />
 
           <ModelResultsPanel modelResults={modelResults} />
 

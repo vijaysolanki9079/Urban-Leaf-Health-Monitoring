@@ -14,6 +14,12 @@ const EVENT_IMAGE_DIR = path.join(
 );
 const SAMPLE_ROOT = path.join(PROJECT_ROOT, "data/01_area_of_interest_selection_using_sampling");
 const ASSET_ROOT = path.join(PROJECT_ROOT, "assets");
+const MODEL_ARTIFACT_ROOTS = [
+  path.join(PROJECT_ROOT, "results"),
+  path.join(PROJECT_ROOT, "h100_config/results"),
+  path.join(PROJECT_ROOT, "models"),
+  path.join(PROJECT_ROOT, "h100_config/models")
+];
 
 function parseCsv(text: string): Record<string, string>[] {
   const rows: string[][] = [];
@@ -200,6 +206,8 @@ export function pickNearestImage(images: ImageRecord[], region: string, period: 
 export function safeAssetPath(relativePath: string): string | null {
   const normalized = path.normalize(relativePath).replace(/^(\.\.(\/|\\|$))+/, "");
   const absolute = path.join(PROJECT_ROOT, normalized);
-  const allowedRoots = [EVENT_IMAGE_DIR, SAMPLE_ROOT, ASSET_ROOT].map((root) => path.resolve(root));
+  const allowedRoots = [EVENT_IMAGE_DIR, SAMPLE_ROOT, ASSET_ROOT, ...MODEL_ARTIFACT_ROOTS].map((root) =>
+    path.resolve(root)
+  );
   return allowedRoots.some((root) => path.resolve(absolute).startsWith(root)) ? absolute : null;
 }
