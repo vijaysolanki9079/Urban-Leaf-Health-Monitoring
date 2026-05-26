@@ -1,0 +1,15 @@
+.next/
+node_modules/
+out/
+*.log
+local_pipeline_test/
+*.tsbuildinfo
+
+# Large/generated model artifacts. Keep these in external storage or release assets.
+models/
+results/
+*.pth
+*.pt
+*.ckpt
+*.h5
+*.keras
