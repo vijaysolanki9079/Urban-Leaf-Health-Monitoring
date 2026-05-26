@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { BarChart3, FlaskConical, Leaf } from "lucide-react";
+import { BarChart3, FlaskConical, Layers3, Leaf } from "lucide-react";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -21,6 +21,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link href="/">
               <BarChart3 size={17} aria-hidden />
               Timeline
+            </Link>
+            <Link href="/segmentation-lab">
+              <Layers3 size={17} aria-hidden />
+              Segmentation Lab
             </Link>
             <Link href="/hypothesis">
               <FlaskConical size={17} aria-hidden />

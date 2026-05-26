@@ -10,6 +10,8 @@ const SEARCH_ROOTS = [
   path.join(ROOT, "h100_config/models")
 ];
 
+export const dynamic = "force-dynamic";
+
 async function exists(filePath: string) {
   try {
     await fs.access(filePath);
@@ -93,6 +95,18 @@ export async function GET() {
     trainingHistory,
     summaries,
     masks,
-    overlays
+    overlays,
+    expectedArtifacts: [
+      "trained checkpoint: results/best_model.pth or h100_config/results/best_model.pth",
+      "inference masks: *_mask.png",
+      "visual overlays: *_overlay.png",
+      "class summaries: *summary.json"
+    ],
+    runbook: {
+      script: "h100_config/06_predict_visualize.py",
+      purpose: "Batch inference over curated satellite rasters, then publish masks, overlays, and class ratios to the dashboard.",
+      example:
+        "python h100_config/06_predict_visualize.py --checkpoint results/best_model.pth --input data/<scene>.npy --output results/inference"
+    }
   });
 }
