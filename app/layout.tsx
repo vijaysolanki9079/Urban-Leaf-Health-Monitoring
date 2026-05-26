@@ -1,7 +1,12 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import { BarChart3, FlaskConical, Layers3, Leaf, MapPinned } from "lucide-react";
+import { Manrope } from "next/font/google";
+import SiteHeader from "@/components/site-header";
 import "./globals.css";
+
+const manrope = Manrope({
+  subsets: ["latin"],
+  variable: "--font-sans"
+});
 
 export const metadata: Metadata = {
   title: "Urban Leaf Monitoring",
@@ -11,31 +16,8 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>
-        <header className="topbar">
-          <Link className="brand" href="/">
-            <Leaf size={22} aria-hidden />
-            <span>Urban Leaf Monitoring</span>
-          </Link>
-          <nav className="nav">
-            <Link href="/">
-              <BarChart3 size={17} aria-hidden />
-              Timeline
-            </Link>
-            <Link href="/segmentation-lab">
-              <Layers3 size={17} aria-hidden />
-              Segmentation Lab
-            </Link>
-            <Link href="/recommendation">
-              <MapPinned size={17} aria-hidden />
-              Recommendation
-            </Link>
-            <Link href="/hypothesis">
-              <FlaskConical size={17} aria-hidden />
-              Hypothesis
-            </Link>
-          </nav>
-        </header>
+      <body className={manrope.variable}>
+        <SiteHeader />
         {children}
       </body>
     </html>

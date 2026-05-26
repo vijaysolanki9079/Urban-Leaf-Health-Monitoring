@@ -1,6 +1,5 @@
 import TimelineDashboard from "@/components/timeline-dashboard";
-import { getRegions } from "@/lib/data";
-import { FEATURE_KEYS } from "@/lib/shared";
+import { FEATURE_KEYS, getRegions } from "@/lib/data";
 
 export default async function HomePage() {
   const regions = await getRegions();
