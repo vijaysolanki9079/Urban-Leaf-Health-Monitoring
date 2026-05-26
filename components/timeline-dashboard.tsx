@@ -501,7 +501,7 @@ export default function TimelineDashboard({ regions, featureKeys }: Props) {
           <div className="hero-actions">
             <button className="btn hero-btn" onClick={() => void loadComparison()}>
               <Search size={17} aria-hidden />
-              Run analysis
+              Analyze Timeline
             </button>
             <span className="hero-proof">
               <Sparkles size={15} aria-hidden />

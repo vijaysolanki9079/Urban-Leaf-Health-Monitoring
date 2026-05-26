@@ -20,9 +20,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Asset not allowed" }, { status: 403 });
   }
 
-  const data = await fs.readFile(absolute);
+  let data: Buffer;
+  try {
+    data = await fs.readFile(absolute);
+  } catch {
+    return NextResponse.json({ error: "Asset not found" }, { status: 404 });
+  }
   const ext = absolute.slice(absolute.lastIndexOf(".")).toLowerCase();
-  return new NextResponse(data, {
+  return new NextResponse(new Uint8Array(data), {
     headers: {
       "Content-Type": CONTENT_TYPES[ext] ?? "application/octet-stream",
       "Cache-Control": "public, max-age=3600"

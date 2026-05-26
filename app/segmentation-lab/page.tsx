@@ -41,16 +41,16 @@ const CLASS_META: Array<{ id: ClassKey; name: string; color: [number, number, nu
 
 const SAMPLE_IMAGES = [
   {
-    label: "Hasdeo 2022 event scene",
+    label: "Hasdeo Disturbance Window",
     url: "/api/asset?path=data/02_comparison_based_on_events/event_1/tiff_to_jpeg/ANN_Hasdeo_Full_2022.jpg"
   },
   {
-    label: "Hasdeo north baseline",
-    url: "/api/asset?path=data/01_area_of_interest_selection_using_sampling/Hasdeo_North_2020-12-17.jpg"
+    label: "Hasdeo Baseline Scene",
+    url: "/api/asset?path=data/02_comparison_based_on_events/event_1/tiff_to_jpeg/MON_Hasdeo_North_2020_01_slowdown.jpg"
   },
   {
-    label: "Kangaroo Island recovery scene",
-    url: "/api/asset?path=data/01_area_of_interest_selection_using_sampling/KI_2021-01-17.jpg"
+    label: "Kangaroo Island Recovery Window",
+    url: "/api/asset?path=data/01_area_of_interest_selection_using_sampling/batch_3/kangaroo_island_black_summer/rgb_images/KI_2021-01-09_POSTFIRE_RECOVERY_RGB.png"
   }
 ];
 
