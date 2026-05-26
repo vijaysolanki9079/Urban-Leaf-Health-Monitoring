@@ -19,7 +19,7 @@ export type RecommendationZone = {
   bounds: Bounds;
   centroid: { lon: number; lat: number };
   areaKm2: number;
-  category: "Lower impact candidate" | "Conditional" | "Avoid";
+  category: "Preferred zone" | "Conditional" | "Avoid";
   suitabilityScore: number;
   environmentalRisk: number;
   evidenceScore: number;
@@ -286,7 +286,7 @@ export async function getHasdeoRecommendationData(): Promise<RecommendationData>
 
     const category =
       suitabilityScore >= 60
-        ? "Lower impact candidate"
+        ? "Preferred zone"
         : suitabilityScore >= 40
           ? "Conditional"
           : "Avoid";
@@ -298,7 +298,7 @@ export async function getHasdeoRecommendationData(): Promise<RecommendationData>
     ];
 
     const rationale =
-      category === "Lower impact candidate"
+      category === "Preferred zone"
         ? `${zone.label} stays comparatively peripheral and keeps most development pressure away from the core forest.`
         : category === "Conditional"
           ? `${zone.label} may be considered only with stricter safeguards because it still carries meaningful ecological sensitivity.`

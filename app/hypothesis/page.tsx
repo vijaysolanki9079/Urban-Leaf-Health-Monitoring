@@ -26,8 +26,12 @@ const evidence = [
 export default function HypothesisPage() {
   return (
     <main className="page hypothesis">
-      <section className="hypothesis-hero">
+      <div className="hypothesis-kicker">
         <span className="badge">Part 1 hypothesis</span>
+        <p className="muted">Research framing for the monitoring, segmentation, and planning workflow.</p>
+      </div>
+
+      <section className="hypothesis-hero">
         <h1>Forest degradation can be detected through synchronized drops in vegetation indices and rises in exposed-land signals.</h1>
       </section>
 

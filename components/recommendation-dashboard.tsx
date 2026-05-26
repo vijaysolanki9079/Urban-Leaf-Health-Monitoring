@@ -5,19 +5,19 @@ import { AlertTriangle, CheckCircle2, Compass, MapPinned, ShieldAlert, Trees } f
 import type { RecommendationData, RecommendationZone } from "@/lib/recommendation";
 
 function zoneFill(category: RecommendationZone["category"]) {
-  if (category === "Lower impact candidate") return "rgba(31, 122, 76, 0.78)";
+  if (category === "Preferred zone") return "rgba(31, 122, 76, 0.78)";
   if (category === "Conditional") return "rgba(211, 145, 50, 0.78)";
   return "rgba(165, 62, 50, 0.82)";
 }
 
 function zoneStroke(category: RecommendationZone["category"]) {
-  if (category === "Lower impact candidate") return "#1f7a4c";
+  if (category === "Preferred zone") return "#1f7a4c";
   if (category === "Conditional") return "#b77722";
   return "#a53e32";
 }
 
 function iconFor(category: RecommendationZone["category"]) {
-  if (category === "Lower impact candidate") return CheckCircle2;
+  if (category === "Preferred zone") return CheckCircle2;
   if (category === "Conditional") return AlertTriangle;
   return ShieldAlert;
 }
@@ -114,7 +114,7 @@ export default function RecommendationDashboard({ data }: { data: Recommendation
           </div>
 
           <div className="zone-legend">
-            <span><i className="good" /> Lower impact candidate</span>
+            <span><i className="good" /> Preferred zone</span>
             <span><i className="watch" /> Conditional</span>
             <span><i className="risk" /> Avoid</span>
           </div>
