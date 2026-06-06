@@ -148,6 +148,63 @@ const CELL_META: Record<CellType, CellTypeMeta> = {
 
 const GRID_SIZE = 10;
 
+interface MigrationRoute {
+  id: string;
+  name: string;
+  coords: Array<{ r: number; c: number }>;
+}
+
+const MIGRATION_ROUTES: MigrationRoute[] = [
+  {
+    id: "elephant-corridor",
+    name: "Elephant Migration Route (North-South)",
+    coords: [
+      { r: 0, c: 3 },
+      { r: 1, c: 3 },
+      { r: 2, c: 3 },
+      { r: 3, c: 4 },
+      { r: 4, c: 4 },
+      { r: 5, c: 4 },
+      { r: 6, c: 5 },
+      { r: 7, c: 5 },
+      { r: 8, c: 5 },
+      { r: 9, c: 5 }
+    ]
+  },
+  {
+    id: "riparian-corridor",
+    name: "Riparian Waterway Corridor (Diagonal)",
+    coords: [
+      { r: 9, c: 0 },
+      { r: 8, c: 1 },
+      { r: 7, c: 2 },
+      { r: 6, c: 3 },
+      { r: 5, c: 4 },
+      { r: 4, c: 5 },
+      { r: 3, c: 6 },
+      { r: 2, c: 7 },
+      { r: 1, c: 8 },
+      { r: 0, c: 9 }
+    ]
+  },
+  {
+    id: "canopy-corridor",
+    name: "Gibbon Canopy Corridor (West-East)",
+    coords: [
+      { r: 3, c: 0 },
+      { r: 3, c: 1 },
+      { r: 3, c: 2 },
+      { r: 4, c: 3 },
+      { r: 4, c: 4 },
+      { r: 4, c: 5 },
+      { r: 5, c: 6 },
+      { r: 5, c: 7 },
+      { r: 5, c: 8 },
+      { r: 5, c: 9 }
+    ]
+  }
+];
+
 function createNaturalGrid(): Cell[] {
   const grid: Cell[] = [];
   for (let r = 0; r < GRID_SIZE; r += 1) {
@@ -155,7 +212,7 @@ function createNaturalGrid(): Cell[] {
       const id = r * GRID_SIZE + c;
       let type: CellType = "grassland";
 
-      // A diagonal river flowing from bottom-left to top-right (col + row === 9)
+      // A diagonal river flowing from bottom-left to top-right
       const isWater = r + c === 9 || (r === 8 && c === 0) || (r === 0 && c === 8);
       
       // Forest core centered around (3,3) to (6,6)
@@ -182,10 +239,17 @@ function createNaturalGrid(): Cell[] {
   return grid;
 }
 
+function getSvgPathString(coords: Array<{ r: number; c: number }>) {
+  return coords
+    .map((pt, idx) => `${idx === 0 ? "M" : "L"} ${pt.c * 40 + 20} ${pt.r * 40 + 20}`)
+    .join(" ");
+}
+
 export default function PlanningSandbox() {
   const [grid, setGrid] = useState<Cell[]>(() => createNaturalGrid());
   const [selectedTool, setSelectedTool] = useState<CellType | "clear">("residential");
   const [isMouseDown, setIsMouseDown] = useState(false);
+  const [showWildlifePaths, setShowWildlifePaths] = useState(true);
 
   // Policy Toggles
   const [policyWildlife, setPolicyWildlife] = useState(false);
@@ -259,7 +323,6 @@ export default function PlanningSandbox() {
       : 0;
 
     // Forest fragmentation check using Flood Fill connected components
-    // A cell is index-mapped. We do BFS/DFS to count forest patches
     const visited = new Set<number>();
     let forestPatches = 0;
 
@@ -271,7 +334,6 @@ export default function PlanningSandbox() {
         
         if (isForest && !visited.has(idx)) {
           forestPatches += 1;
-          // Traverse whole cluster
           const queue = [idx];
           visited.add(idx);
           while (queue.length > 0) {
@@ -279,7 +341,6 @@ export default function PlanningSandbox() {
             const cr = Math.floor(curr / GRID_SIZE);
             const cc = curr % GRID_SIZE;
             
-            // Look up, down, left, right
             const neighbors = [
               { r: cr - 1, c: cc },
               { r: cr + 1, c: cc },
@@ -303,39 +364,59 @@ export default function PlanningSandbox() {
       }
     }
 
-    // Fragmentation index logic:
-    // 0 patches = 100% fragmentation
-    // 1 patch = base fragmentation (e.g. 10% or 0%)
-    // Multi patches = fragmented. e.g. 10% + 25% * (patches - 1)
     let fragmentationIndex = 0;
     if (forestCount === 0) {
       fragmentationIndex = 100;
     } else if (forestPatches > 1) {
       fragmentationIndex = Math.min(100, 10 + (forestPatches - 1) * 20);
     } else {
-      fragmentationIndex = 5; // stable single block
+      fragmentationIndex = 5;
     }
 
-    // Adjust fragmentation score if Wildlife Corridors policy is active
     if (policyWildlife && fragmentationIndex > 5) {
       fragmentationIndex = Math.max(5, fragmentationIndex - 35);
     }
 
-    // Bare soil erosion risk index: BSI percentage
     let soilRiskScore = bareSoilPct * 1.5;
     if (policyDrainage) {
       soilRiskScore = Math.max(0, soilRiskScore - 12);
     }
     soilRiskScore = Math.min(100, Math.max(0, soilRiskScore));
 
-    // Calculate Overall Ecological Health Score
-    // Starts at 100, drops on deforestation, fragmentation, heat delta, erosion
-    const deforestationPenalty = canopyLoss * 0.9;
-    const fragmentationPenalty = Math.max(0, fragmentationIndex - 5) * 0.45;
-    const heatPenalty = Math.max(0, lstDelta + 0.8) * 8.5; // offset normal baseline
-    const soilPenalty = soilRiskScore * 0.35;
+    // Evaluate Wildlife Migration corridors
+    const routesStatus = MIGRATION_ROUTES.map((route) => {
+      let isBlocked = false;
+      const blockedCells: Array<{ r: number; c: number }> = [];
 
-    const rawScore = 100 - (deforestationPenalty + fragmentationPenalty + heatPenalty + soilPenalty);
+      for (const pt of route.coords) {
+        const cell = grid[pt.r * GRID_SIZE + pt.c];
+        const isUrbanBarrier = cell.type === "residential" || cell.type === "industrial";
+        const isRoadBarrier = cell.type === "green-highway" && !policyWildlife;
+
+        if (isUrbanBarrier || isRoadBarrier) {
+          isBlocked = true;
+          blockedCells.push(pt);
+        }
+      }
+
+      return {
+        ...route,
+        isBlocked,
+        blockedCells
+      };
+    });
+
+    const activePathsCount = routesStatus.filter((r) => !r.isBlocked).length;
+    const connectivityPct = Math.round((activePathsCount / MIGRATION_ROUTES.length) * 100);
+
+    // Calculate Overall Ecological Health Score
+    const deforestationPenalty = canopyLoss * 0.8;
+    const fragmentationPenalty = Math.max(0, fragmentationIndex - 5) * 0.35;
+    const heatPenalty = Math.max(0, lstDelta + 0.8) * 8.0;
+    const soilPenalty = soilRiskScore * 0.25;
+    const connectivityPenalty = (100 - connectivityPct) * 0.35;
+
+    const rawScore = 100 - (deforestationPenalty + fragmentationPenalty + heatPenalty + soilPenalty + connectivityPenalty);
     const score = Math.max(0, Math.min(100, Math.round(rawScore)));
 
     let grade = "F";
@@ -376,7 +457,9 @@ export default function PlanningSandbox() {
       industrialCount,
       roadCount,
       forestCount,
-      forestPatches
+      forestPatches,
+      routesStatus,
+      connectivityPct
     };
   }, [grid, policyGreenRoofs, policyWildlife, policyDrainage, initialStats]);
 
@@ -419,7 +502,6 @@ export default function PlanningSandbox() {
       const initialGrid = createNaturalGrid();
       
       if (scenarioName === "wilderness") {
-        // All natural state
         setPolicyWildlife(false);
         setPolicyGreenRoofs(false);
         setPolicyDrainage(false);
@@ -427,21 +509,17 @@ export default function PlanningSandbox() {
       }
 
       if (scenarioName === "sprawl") {
-        // Industrial and residential slicing right through the center core
         setPolicyWildlife(false);
         setPolicyGreenRoofs(false);
         setPolicyDrainage(false);
         
         return initialGrid.map((cell) => {
-          // Central row slice for infrastructure/roads (row 4)
           if (cell.row === 4) {
             return { ...cell, type: "green-highway" };
           }
-          // Center mining pit and industrial zone
           if (cell.row >= 3 && cell.row <= 5 && cell.col >= 3 && cell.col <= 6) {
             return { ...cell, type: "industrial" };
           }
-          // Urban residential blocks scattered in surrounding forest
           if ((cell.row === 2 || cell.row === 6) && cell.col >= 2 && cell.col <= 7) {
             return { ...cell, type: "residential" };
           }
@@ -450,21 +528,17 @@ export default function PlanningSandbox() {
       }
 
       if (scenarioName === "sustainable") {
-        // Development restricted to southern border edge, keeping central core intact
         setPolicyWildlife(true);
         setPolicyGreenRoofs(true);
         setPolicyDrainage(true);
 
         return initialGrid.map((cell) => {
-          // Highway runs along bottom edge (row 9)
           if (cell.row === 9 && cell.col !== 0 && cell.col !== 9) {
             return { ...cell, type: "green-highway" };
           }
-          // Residential blocks nested near the road at the bottom
           if (cell.row === 8 && cell.col >= 2 && cell.col <= 7) {
             return { ...cell, type: "residential" };
           }
-          // Small industrial block restricted to southern periphery
           if (cell.row === 8 && cell.col === 1) {
             return { ...cell, type: "industrial" };
           }
@@ -473,13 +547,11 @@ export default function PlanningSandbox() {
       }
 
       if (scenarioName === "ecovillage") {
-        // Micro-settlements in the corner grasslands, leaving the forest completely isolated
         setPolicyWildlife(true);
         setPolicyGreenRoofs(false);
         setPolicyDrainage(true);
 
         return initialGrid.map((cell) => {
-          // Place homes only in grassland regions (row 0-1, col 0-2) and (row 8-9, col 7-8)
           const isCornerGrass1 = cell.row <= 1 && cell.col <= 2 && cell.type === "grassland";
           const isCornerGrass2 = cell.row >= 8 && cell.col >= 7 && cell.col <= 9 && cell.type === "grassland";
           
@@ -531,21 +603,27 @@ export default function PlanningSandbox() {
         </div>
       </section>
 
-      {/* Main Sandbox Grid */}
       <div className="sandbox-grid-layout">
-        {/* Left Hand Map Editor */}
         <section className="surface sandbox-map-panel">
           <div className="surface-head">
             <div>
               <h2>Interactive Siting Canvas</h2>
               <p className="muted">Click and drag to paint zones. Clear to restore natural landscape.</p>
             </div>
-            <button type="button" className="btn btn-reset" onClick={resetAll} aria-label="Reset canvas">
-              <RefreshCcw size={14} /> Reset
-            </button>
+            <div className="canvas-header-actions">
+              <button
+                type="button"
+                className={`btn btn-toggle-paths ${showWildlifePaths ? "active" : ""}`}
+                onClick={() => setShowWildlifePaths(!showWildlifePaths)}
+              >
+                <Compass size={14} /> {showWildlifePaths ? "Hide Pathways" : "Show Pathways"}
+              </button>
+              <button type="button" className="btn btn-reset" onClick={resetAll} aria-label="Reset canvas">
+                <RefreshCcw size={14} /> Reset
+              </button>
+            </div>
           </div>
 
-          {/* Floating Paint Palette */}
           <div className="paint-palette">
             {Object.values(CELL_META).map((meta) => {
               const active = selectedTool === meta.type;
@@ -574,7 +652,6 @@ export default function PlanningSandbox() {
             </button>
           </div>
 
-          {/* SVG Map Grid */}
           <div className="map-grid-container">
             <div className="grid-labels-row">
               {Array.from({ length: GRID_SIZE }).map((_, idx) => (
@@ -595,12 +672,12 @@ export default function PlanningSandbox() {
                   role="grid"
                   aria-label="Planning Sandbox Grid"
                 >
+                  {/* Grid cells */}
                   {grid.map((cell) => {
                     const meta = CELL_META[cell.type];
                     const x = cell.col * 40;
                     const y = cell.row * 40;
                     
-                    // Render inner markers to give premium visual cues
                     let cellSymbol = null;
                     if (cell.type === "dense-forest") {
                       cellSymbol = (
@@ -641,6 +718,35 @@ export default function PlanningSandbox() {
                       </g>
                     );
                   })}
+
+                  {/* Wildlife Corridors Overlay */}
+                  {showWildlifePaths &&
+                    simulation.routesStatus.map((route) => {
+                      const pathString = getSvgPathString(route.coords);
+                      return (
+                        <g key={route.id} className="wildlife-path-group">
+                          {/* Outer glow line */}
+                          <path
+                            d={pathString}
+                            fill="none"
+                            stroke={route.isBlocked ? "rgba(165, 62, 50, 0.32)" : "rgba(31, 122, 76, 0.35)"}
+                            strokeWidth="8"
+                            strokeLinecap="round"
+                            className={route.isBlocked ? "path-glow-blocked" : "path-glow-active"}
+                          />
+                          {/* Core animated dashed line */}
+                          <path
+                            d={pathString}
+                            fill="none"
+                            stroke={route.isBlocked ? "#a53e32" : "#54a36f"}
+                            strokeWidth="3.5"
+                            strokeLinecap="round"
+                            strokeDasharray={route.isBlocked ? "4 8" : "10 12"}
+                            className={`wildlife-path-core ${route.isBlocked ? "blocked" : "active"}`}
+                          />
+                        </g>
+                      );
+                    })}
                 </svg>
               </div>
             </div>
@@ -654,9 +760,7 @@ export default function PlanningSandbox() {
           </div>
         </section>
 
-        {/* Right Hand Sidebar - Scores & Metrics */}
         <aside className="sandbox-sidebar flex-column">
-          {/* Eco score panel */}
           <section className="surface eco-scorecard flex-column align-center text-center">
             <span className="eyebrow">Eco-Planning Health</span>
             <div className={`score-badge-ring ${simulation.gradeColor}`}>
@@ -667,11 +771,10 @@ export default function PlanningSandbox() {
             </div>
             <h3 className="score-grade-text">{simulation.gradeText}</h3>
             <p className="muted text-small">
-              Derived from forest loss, habitat fragmentation, heat index, and soil protection rules.
+              Derived from forest loss, habitat fragmentation, heat index, and wildlife connectivity.
             </p>
           </section>
 
-          {/* Mitigation Policies Panel */}
           <section className="surface policy-toggles">
             <div className="surface-head">
               <div>
@@ -690,7 +793,7 @@ export default function PlanningSandbox() {
                 />
                 <div className="toggle-copy">
                   <strong>Wildlife Corridors / Underpasses</strong>
-                  <span>Mitigates fragmentation score by adding habitat passes.</span>
+                  <span>Mitigates fragmentation score and clears highways for animal migration.</span>
                 </div>
               </label>
 
@@ -720,9 +823,35 @@ export default function PlanningSandbox() {
             </div>
           </section>
 
-          {/* Dynamic Indicators */}
           <section className="surface indicators-list flex-column gap-12">
             <h2>Simulation Indicators</h2>
+
+            {/* Wildlife Connectivity */}
+            <article className="indicator-strip">
+              <div className="indicator-summary">
+                <div className="indicator-label-row">
+                  <Compass size={16} />
+                  <span>Wildlife Connectivity</span>
+                </div>
+                <strong className={simulation.connectivityPct > 60 ? "text-success" : simulation.connectivityPct > 30 ? "text-warning" : "text-danger"}>
+                  {simulation.connectivityPct}%
+                </strong>
+              </div>
+              <div className="progress-bar">
+                <i className={`bar-fill ${simulation.connectivityPct > 60 ? "fill-success" : simulation.connectivityPct > 30 ? "fill-warning" : "fill-danger"}`} style={{ width: `${simulation.connectivityPct}%` }} />
+              </div>
+              <div className="routes-status-list">
+                {simulation.routesStatus.map((route) => (
+                  <div key={route.id} className="route-status-item">
+                    <span className={`route-bullet ${route.isBlocked ? "blocked" : "active"}`} />
+                    <span className="route-name text-small">{route.name.split(" (")[0]}</span>
+                    <span className={`route-status-label ${route.isBlocked ? "text-danger" : "text-success"}`}>
+                      {route.isBlocked ? "Blocked" : "Clear"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </article>
 
             {/* Canopy Loss */}
             <article className="indicator-strip">
@@ -747,7 +876,7 @@ export default function PlanningSandbox() {
             <article className="indicator-strip">
               <div className="indicator-summary">
                 <div className="indicator-label-row">
-                  <Compass size={16} />
+                  <Activity size={16} />
                   <span>Forest Fragmentation</span>
                 </div>
                 <strong className={simulation.fragmentationIndex > 45 ? "text-danger" : simulation.fragmentationIndex > 15 ? "text-warning" : "text-success"}>
@@ -804,7 +933,6 @@ export default function PlanningSandbox() {
             </article>
           </section>
 
-          {/* Footprint inventory */}
           <section className="surface footprint-inventory">
             <h2>Placement Inventory</h2>
             <div className="inventory-grid">
@@ -829,7 +957,6 @@ export default function PlanningSandbox() {
         </aside>
       </div>
 
-      {/* Siting Guidelines & Cautions */}
       <section className="surface sandbox-guidelines">
         <div className="surface-head">
           <div>
