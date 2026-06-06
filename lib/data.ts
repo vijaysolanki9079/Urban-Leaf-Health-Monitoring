@@ -3,6 +3,22 @@ import path from "path";
 import { FEATURE_KEYS, type FeatureRecord, type ImageRecord, type RegionSummary } from "@/lib/shared";
 export { FEATURE_KEYS } from "@/lib/shared";
 
+// ---------------------------------------------------------------------------
+// In-memory cache — avoids re-parsing CSV and re-walking the filesystem on
+// every API request. TTL is 5 minutes; entries are invalidated lazily.
+// ---------------------------------------------------------------------------
+const CACHE_TTL_MS = 5 * 60 * 1000;
+
+interface CacheEntry<T> {
+  value: T;
+  expiresAt: number;
+}
+
+const cache: {
+  features?: CacheEntry<FeatureRecord[]>;
+  images?: CacheEntry<ImageRecord[]>;
+} = {};
+
 const PROJECT_ROOT = process.cwd();
 const FEATURE_CSV = path.join(
   PROJECT_ROOT,
@@ -114,8 +130,12 @@ async function walkFiles(dir: string, extensions: Set<string>): Promise<string[]
 }
 
 export async function getFeatures(): Promise<FeatureRecord[]> {
-  const csv = await fs.readFile(FEATURE_CSV, "utf8");
-  return parseCsv(csv)
+  const now = Date.now();
+  if (cache.features && cache.features.expiresAt > now) {
+    return cache.features.value;
+  }
+  const csv = await fs.readFile(FEATURE_CSV, "utf8").catch(() => "");
+  const value = parseCsv(csv)
     .map((row) => {
       const base: FeatureRecord = {
         id: row.id,
@@ -124,22 +144,28 @@ export async function getFeatures(): Promise<FeatureRecord[]> {
         period: row.period
       };
       for (const key of FEATURE_KEYS) {
-        const value = toNumber(row[key]);
-        if (value !== undefined) base[key] = value;
+        const v = toNumber(row[key]);
+        if (v !== undefined) base[key] = v;
       }
       return base;
     })
     .filter((row) => row.period);
+  cache.features = { value, expiresAt: now + CACHE_TTL_MS };
+  return value;
 }
 
 export async function getImages(): Promise<ImageRecord[]> {
+  const now = Date.now();
+  if (cache.images && cache.images.expiresAt > now) {
+    return cache.images.value;
+  }
   const imagePaths = [
     ...(await walkFiles(EVENT_IMAGE_DIR, new Set([".jpg", ".jpeg", ".png"]))),
     ...(await walkFiles(SAMPLE_ROOT, new Set([".jpg", ".jpeg", ".png"]))),
     ...(await walkFiles(ASSET_ROOT, new Set([".jpg", ".jpeg", ".png"])))
   ];
 
-  return imagePaths
+  const value = imagePaths
     .flatMap((filePath): ImageRecord[] => {
       const filename = path.basename(filePath);
       const parsed = parseDateFromName(filename);
@@ -163,6 +189,8 @@ export async function getImages(): Promise<ImageRecord[]> {
       return [image];
     })
     .sort((a, b) => a.date.localeCompare(b.date));
+  cache.images = { value, expiresAt: now + CACHE_TTL_MS };
+  return value;
 }
 
 export async function getRegions(): Promise<RegionSummary[]> {
@@ -190,8 +218,12 @@ export async function getRegions(): Promise<RegionSummary[]> {
 export function filterFeatures(
   rows: FeatureRecord[],
   from: string,
-  to: string
+  to: string,
+  region?: string
 ): FeatureRecord[] {
+  // Feature CSV is Hasdeo-only. For non-Hasdeo regions return an empty
+  // timeline rather than silently returning all Hasdeo rows.
+  if (region && !region.startsWith("hasdeo")) return [];
   return rows.filter((row) => row.period >= from && row.period <= to);
 }
 

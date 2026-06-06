@@ -454,23 +454,35 @@ export default function TimelineDashboard({ regions, featureKeys }: Props) {
   const [data, setData] = useState<CompareResponse | null>(null);
   const [modelResults, setModelResults] = useState<ModelResults | null>(null);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   async function loadComparison(overrides?: Partial<{ region: string; feature: FeatureKey; from: string; to: string }>) {
     setLoading(true);
+    setFetchError(null);
     const nextRegion = overrides?.region ?? region;
     const nextFeature = overrides?.feature ?? feature;
     const nextFrom = overrides?.from ?? from;
     const nextTo = overrides?.to ?? to;
     const params = new URLSearchParams({ region: nextRegion, feature: nextFeature, from: nextFrom, to: nextTo });
-    const response = await fetch(`/api/compare?${params.toString()}`);
-    setData(await response.json());
-    setLoading(false);
+    try {
+      const response = await fetch(`/api/compare?${params.toString()}`);
+      if (!response.ok) throw new Error(`Server error: ${response.status} ${response.statusText}`);
+      setData(await response.json());
+    } catch (err) {
+      setFetchError(err instanceof Error ? err.message : "Failed to load comparison data. Please try again.");
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
     void loadComparison();
     fetch("/api/model-results")
-      .then((response) => response.json())
+      .then((response) => {
+        if (!response.ok) throw new Error("model-results not available");
+        return response.json();
+      })
       .then(setModelResults)
       .catch(() => setModelResults(null));
     // Initial load only; form changes run through explicit actions.
@@ -490,6 +502,12 @@ export default function TimelineDashboard({ regions, featureKeys }: Props) {
 
   return (
     <main className="page">
+      {fetchError ? (
+        <div className="fetch-error-banner" role="alert">
+          <strong>⚠ Could not load data:</strong> {fetchError}
+          <button onClick={() => setFetchError(null)} aria-label="Dismiss error">✕</button>
+        </div>
+      ) : null}
       <section className="workspace-head">
         <div className="hero-copy">
           <span className="eyebrow premium-eyebrow">Remote sensing intelligence</span>

@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
   const selected = FEATURE_KEYS.includes(feature) ? feature : "NDVI";
 
   const [features, images] = await Promise.all([getFeatures(), getImages()]);
-  const timeline = filterFeatures(features, from, to);
+  const timeline = filterFeatures(features, from, to, region);
   const before = nearestFeature(features, from);
   const after = nearestFeature(features, to);
   const beforeValue = before?.[selected];
