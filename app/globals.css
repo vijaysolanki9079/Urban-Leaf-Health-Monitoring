@@ -2642,7 +2642,95 @@ th {
 
 .route-status-label {
   font-weight: 800;
-  text-transform: uppercase;
   font-size: 9px;
   letter-spacing: 0.05em;
 }
+
+/* ── Primary Recommendation Image Card ── */
+.recommendation-headline-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 24px 64px rgba(7, 19, 15, 0.3);
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  min-height: 240px;
+}
+
+/* Satellite image fill */
+.recommendation-headline-img {
+  position: absolute;
+  inset: 0;
+  background:
+    url("/api/asset?path=assets/presentation_images/2.Cloud-problem-removed.png") center / cover no-repeat;
+  transition: transform 600ms ease;
+}
+
+.recommendation-headline-card:hover .recommendation-headline-img {
+  transform: scale(1.04);
+}
+
+/* Gradient overlay so text is always readable */
+.recommendation-headline-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(7, 19, 15, 0.18) 0%,
+      rgba(7, 19, 15, 0.55) 40%,
+      rgba(7, 19, 15, 0.92) 100%
+    );
+  pointer-events: none;
+}
+
+/* Text body sits above image + overlay */
+.recommendation-headline-body {
+  position: relative;
+  z-index: 2;
+  margin-top: auto;
+  padding: 22px 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rec-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 820;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.rec-eyebrow::before {
+  content: "";
+  display: inline-block;
+  width: 18px;
+  height: 2px;
+  background: var(--gold);
+  border-radius: 2px;
+}
+
+.rec-headline {
+  display: block;
+  font-size: clamp(16px, 2.2vw, 22px);
+  font-weight: 840;
+  line-height: 1.2;
+  color: #ffffff;
+  letter-spacing: -0.01em;
+}
+
+.rec-summary {
+  margin: 2px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.72);
+}
+
