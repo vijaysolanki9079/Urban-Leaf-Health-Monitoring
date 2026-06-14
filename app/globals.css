@@ -2925,21 +2925,10 @@ th {
 }
 
 .btn-toggle-theme {
-  font-size: 12px;
-  padding: 6px 12px;
-  min-height: auto;
-  gap: 6px;
   display: inline-flex;
   align-items: center;
-  color: var(--ink);
-  border: 1px solid var(--line);
-  background: var(--panel);
+  gap: 6px;
   cursor: pointer;
-  border-radius: 4px;
-}
-
-.btn-toggle-theme:hover {
-  background: var(--panel-subtle);
 }
 
 .wildlife-path-group {

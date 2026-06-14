@@ -594,7 +594,7 @@ export default function PlanningSandbox() {
                 </button>
                 <button
                   type="button"
-                  className="btn btn-toggle-theme"
+                  className="btn btn-toggle-theme btn-reset"
                   onClick={() => setIsDarkMode(!isDarkMode)}
                   aria-label="Toggle dark mode theme"
                 >
