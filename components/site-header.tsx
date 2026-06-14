@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, FlaskConical, Layers3, Leaf, MapPinned } from "lucide-react";
+import { BarChart3, FlaskConical, Layers3, Leaf, MapPinned, TreePine } from "lucide-react";
 
 const LINKS = [
   { href: "/", label: "Timeline", icon: BarChart3 },
   { href: "/segmentation-lab", label: "Segmentation Lab", icon: Layers3 },
+  { href: "/sandbox", label: "Planning Sandbox", icon: TreePine },
   { href: "/recommendation", label: "Recommendation", icon: MapPinned },
   { href: "/hypothesis", label: "Hypothesis", icon: FlaskConical }
 ];

@@ -5,7 +5,6 @@ import {
   Activity,
   AlertTriangle,
   ArrowDownRight,
-  ArrowRight,
   CheckCircle2,
   Compass,
   FileText,
@@ -34,6 +33,8 @@ type CellType =
   | "residential"
   | "industrial"
   | "green-highway";
+
+type ScenarioKey = "wilderness" | "sprawl" | "sustainable" | "ecovillage" | null;
 
 interface Cell {
   id: number;
@@ -212,10 +213,7 @@ function createNaturalGrid(): Cell[] {
       const id = r * GRID_SIZE + c;
       let type: CellType = "grassland";
 
-      // A diagonal river flowing from bottom-left to top-right
       const isWater = r + c === 9 || (r === 8 && c === 0) || (r === 0 && c === 8);
-      
-      // Forest core centered around (3,3) to (6,6)
       const isCore = r >= 2 && r <= 6 && c >= 2 && c <= 6;
       const isBuffer = r >= 1 && r <= 7 && c >= 1 && c <= 7;
 
@@ -227,13 +225,7 @@ function createNaturalGrid(): Cell[] {
         type = "sparse-forest";
       }
 
-      grid.push({
-        id,
-        row: r,
-        col: c,
-        type,
-        initialType: type
-      });
+      grid.push({ id, row: r, col: c, type, initialType: type });
     }
   }
   return grid;
@@ -245,11 +237,39 @@ function getSvgPathString(coords: Array<{ r: number; c: number }>) {
     .join(" ");
 }
 
+const SCENARIO_META: Record<Exclude<ScenarioKey, null>, { label: string; icon: React.ReactNode; btnClass: string; desc: string }> = {
+  wilderness: {
+    label: "Natural State",
+    icon: <Trees size={13} />,
+    btnClass: "",
+    desc: "Pristine wilderness baseline"
+  },
+  sprawl: {
+    label: "Unplanned Sprawl",
+    icon: <Flame size={13} />,
+    btnClass: "warning-btn",
+    desc: "Max urban encroachment"
+  },
+  sustainable: {
+    label: "Smart Growth",
+    icon: <Sparkles size={13} />,
+    btnClass: "success-btn",
+    desc: "Eco-optimised development"
+  },
+  ecovillage: {
+    label: "Eco-Village",
+    icon: <Leaf size={13} />,
+    btnClass: "info-btn",
+    desc: "Low-footprint settlement"
+  }
+};
+
 export default function PlanningSandbox() {
   const [grid, setGrid] = useState<Cell[]>(() => createNaturalGrid());
   const [selectedTool, setSelectedTool] = useState<CellType | "clear">("residential");
   const [isMouseDown, setIsMouseDown] = useState(false);
   const [showWildlifePaths, setShowWildlifePaths] = useState(true);
+  const [activeScenario, setActiveScenario] = useState<ScenarioKey>("wilderness");
 
   // Policy Toggles
   const [policyWildlife, setPolicyWildlife] = useState(false);
@@ -275,37 +295,29 @@ export default function PlanningSandbox() {
     };
   }, [grid]);
 
-  // Compute live scores and components
   const simulation = useMemo(() => {
     let currentCanopy = 0;
     let currentBareSoil = 0;
     let currentBuiltUp = 0;
     let baseLst = 0;
     let forestCount = 0;
-    
-    // Count of placed elements
     let residentialCount = 0;
     let industrialCount = 0;
     let roadCount = 0;
 
     for (const cell of grid) {
       const meta = CELL_META[cell.type];
-      
       currentCanopy += meta.canopy;
       currentBareSoil += meta.bareSoil;
       currentBuiltUp += meta.builtUp;
 
-      // Adjust LST delta based on green roofs policy
       let cellLst = meta.lstDelta;
       if (policyGreenRoofs && (cell.type === "residential" || cell.type === "industrial")) {
         cellLst -= 1.2;
       }
       baseLst += cellLst;
 
-      if (cell.type === "dense-forest" || cell.type === "sparse-forest") {
-        forestCount += 1;
-      }
-
+      if (cell.type === "dense-forest" || cell.type === "sparse-forest") forestCount += 1;
       if (cell.type === "residential") residentialCount += 1;
       if (cell.type === "industrial") industrialCount += 1;
       if (cell.type === "green-highway") roadCount += 1;
@@ -314,15 +326,12 @@ export default function PlanningSandbox() {
     const canopyPct = currentCanopy / GRID_SIZE ** 2;
     const bareSoilPct = currentBareSoil / GRID_SIZE ** 2;
     const builtUpPct = currentBuiltUp / GRID_SIZE ** 2;
-    
-    // LST is normalized relative delta
     const lstDelta = baseLst / GRID_SIZE ** 2;
 
     const canopyLoss = initialStats.canopy > 0
       ? Math.max(0, (initialStats.canopy - canopyPct) / initialStats.canopy) * 100
       : 0;
 
-    // Forest fragmentation check using Flood Fill connected components
     const visited = new Set<number>();
     let forestPatches = 0;
 
@@ -331,7 +340,7 @@ export default function PlanningSandbox() {
         const idx = r * GRID_SIZE + c;
         const cell = grid[idx];
         const isForest = cell.type === "dense-forest" || cell.type === "sparse-forest";
-        
+
         if (isForest && !visited.has(idx)) {
           forestPatches += 1;
           const queue = [idx];
@@ -340,14 +349,12 @@ export default function PlanningSandbox() {
             const curr = queue.shift()!;
             const cr = Math.floor(curr / GRID_SIZE);
             const cc = curr % GRID_SIZE;
-            
             const neighbors = [
               { r: cr - 1, c: cc },
               { r: cr + 1, c: cc },
               { r: cr, c: cc - 1 },
               { r: cr, c: cc + 1 }
             ];
-
             for (const n of neighbors) {
               if (n.r >= 0 && n.r < GRID_SIZE && n.c >= 0 && n.c < GRID_SIZE) {
                 const nIdx = n.r * GRID_SIZE + n.c;
@@ -383,7 +390,6 @@ export default function PlanningSandbox() {
     }
     soilRiskScore = Math.min(100, Math.max(0, soilRiskScore));
 
-    // Evaluate Wildlife Migration corridors
     const routesStatus = MIGRATION_ROUTES.map((route) => {
       let isBlocked = false;
       const blockedCells: Array<{ r: number; c: number }> = [];
@@ -399,17 +405,12 @@ export default function PlanningSandbox() {
         }
       }
 
-      return {
-        ...route,
-        isBlocked,
-        blockedCells
-      };
+      return { ...route, isBlocked, blockedCells };
     });
 
     const activePathsCount = routesStatus.filter((r) => !r.isBlocked).length;
     const connectivityPct = Math.round((activePathsCount / MIGRATION_ROUTES.length) * 100);
 
-    // Calculate Overall Ecological Health Score
     const deforestationPenalty = canopyLoss * 0.8;
     const fragmentationPenalty = Math.max(0, fragmentationIndex - 5) * 0.35;
     const heatPenalty = Math.max(0, lstDelta + 0.8) * 8.0;
@@ -422,61 +423,26 @@ export default function PlanningSandbox() {
     let grade = "F";
     let gradeColor = "risk";
     let gradeText = "Ecological Collapse";
-    
-    if (score >= 85) {
-      grade = "A";
-      gradeColor = "good";
-      gradeText = "Regenerative Urban Design";
-    } else if (score >= 70) {
-      grade = "B";
-      gradeColor = "good-subtle";
-      gradeText = "Sustainable Siting";
-    } else if (score >= 55) {
-      grade = "C";
-      gradeColor = "watch";
-      gradeText = "Ecological Modification";
-    } else if (score >= 40) {
-      grade = "D";
-      gradeColor = "watch-severe";
-      gradeText = "High Disruption Risk";
-    }
+
+    if (score >= 85) { grade = "A"; gradeColor = "good"; gradeText = "Regenerative Urban Design"; }
+    else if (score >= 70) { grade = "B"; gradeColor = "good-subtle"; gradeText = "Sustainable Siting"; }
+    else if (score >= 55) { grade = "C"; gradeColor = "watch"; gradeText = "Ecological Modification"; }
+    else if (score >= 40) { grade = "D"; gradeColor = "watch-severe"; gradeText = "High Disruption Risk"; }
 
     return {
-      canopyPct,
-      bareSoilPct,
-      builtUpPct,
-      lstDelta,
-      canopyLoss,
-      fragmentationIndex,
-      soilRiskScore,
-      score,
-      grade,
-      gradeColor,
-      gradeText,
-      residentialCount,
-      industrialCount,
-      roadCount,
-      forestCount,
-      forestPatches,
-      routesStatus,
-      connectivityPct
+      canopyPct, bareSoilPct, builtUpPct, lstDelta, canopyLoss,
+      fragmentationIndex, soilRiskScore, score, grade, gradeColor, gradeText,
+      residentialCount, industrialCount, roadCount, forestCount, forestPatches,
+      routesStatus, connectivityPct
     };
   }, [grid, policyGreenRoofs, policyWildlife, policyDrainage, initialStats]);
 
-  // Edit cell handlers
   function paintCell(id: number) {
+    setActiveScenario(null);
     setGrid((prev) =>
       prev.map((cell) => {
         if (cell.id !== id) return cell;
-        
-        let newType = cell.type;
-        if (selectedTool === "clear") {
-          newType = cell.initialType;
-        } else {
-          newType = selectedTool;
-        }
-
-        return { ...cell, type: newType };
+        return { ...cell, type: selectedTool === "clear" ? cell.initialType : selectedTool };
       })
     );
   }
@@ -487,20 +453,17 @@ export default function PlanningSandbox() {
   }
 
   function handleCellMouseEnter(id: number) {
-    if (isMouseDown) {
-      paintCell(id);
-    }
+    if (isMouseDown) paintCell(id);
   }
 
-  function handleMouseUp() {
-    setIsMouseDown(false);
-  }
+  function handleMouseUp() { setIsMouseDown(false); }
 
-  // Preset Loaders
-  function loadScenario(scenarioName: string) {
+  function loadScenario(scenarioName: ScenarioKey) {
+    if (!scenarioName) return;
+    setActiveScenario(scenarioName);
     setGrid((prev) => {
       const initialGrid = createNaturalGrid();
-      
+
       if (scenarioName === "wilderness") {
         setPolicyWildlife(false);
         setPolicyGreenRoofs(false);
@@ -512,17 +475,10 @@ export default function PlanningSandbox() {
         setPolicyWildlife(false);
         setPolicyGreenRoofs(false);
         setPolicyDrainage(false);
-        
         return initialGrid.map((cell) => {
-          if (cell.row === 4) {
-            return { ...cell, type: "green-highway" };
-          }
-          if (cell.row >= 3 && cell.row <= 5 && cell.col >= 3 && cell.col <= 6) {
-            return { ...cell, type: "industrial" };
-          }
-          if ((cell.row === 2 || cell.row === 6) && cell.col >= 2 && cell.col <= 7) {
-            return { ...cell, type: "residential" };
-          }
+          if (cell.row === 4) return { ...cell, type: "green-highway" };
+          if (cell.row >= 3 && cell.row <= 5 && cell.col >= 3 && cell.col <= 6) return { ...cell, type: "industrial" };
+          if ((cell.row === 2 || cell.row === 6) && cell.col >= 2 && cell.col <= 7) return { ...cell, type: "residential" };
           return cell;
         });
       }
@@ -531,17 +487,10 @@ export default function PlanningSandbox() {
         setPolicyWildlife(true);
         setPolicyGreenRoofs(true);
         setPolicyDrainage(true);
-
         return initialGrid.map((cell) => {
-          if (cell.row === 9 && cell.col !== 0 && cell.col !== 9) {
-            return { ...cell, type: "green-highway" };
-          }
-          if (cell.row === 8 && cell.col >= 2 && cell.col <= 7) {
-            return { ...cell, type: "residential" };
-          }
-          if (cell.row === 8 && cell.col === 1) {
-            return { ...cell, type: "industrial" };
-          }
+          if (cell.row === 9 && cell.col !== 0 && cell.col !== 9) return { ...cell, type: "green-highway" };
+          if (cell.row === 8 && cell.col >= 2 && cell.col <= 7) return { ...cell, type: "residential" };
+          if (cell.row === 8 && cell.col === 1) return { ...cell, type: "industrial" };
           return cell;
         });
       }
@@ -550,14 +499,10 @@ export default function PlanningSandbox() {
         setPolicyWildlife(true);
         setPolicyGreenRoofs(false);
         setPolicyDrainage(true);
-
         return initialGrid.map((cell) => {
           const isCornerGrass1 = cell.row <= 1 && cell.col <= 2 && cell.type === "grassland";
           const isCornerGrass2 = cell.row >= 8 && cell.col >= 7 && cell.col <= 9 && cell.type === "grassland";
-          
-          if (isCornerGrass1 || isCornerGrass2) {
-            return { ...cell, type: "residential" };
-          }
+          if (isCornerGrass1 || isCornerGrass2) return { ...cell, type: "residential" };
           return cell;
         });
       }
@@ -568,6 +513,7 @@ export default function PlanningSandbox() {
 
   function resetAll() {
     setGrid(createNaturalGrid());
+    setActiveScenario("wilderness");
     setPolicyWildlife(false);
     setPolicyGreenRoofs(false);
     setPolicyDrainage(false);
@@ -575,6 +521,8 @@ export default function PlanningSandbox() {
 
   return (
     <main className="page sandbox-page" onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}>
+
+      {/* ── Hero ── */}
       <section className="sandbox-hero">
         <div>
           <span className="badge">Zoning Sandbox</span>
@@ -584,182 +532,198 @@ export default function PlanningSandbox() {
             forest fragmentation (connected corridors), heat island LST delta, and runoff risk to grade your plan.
           </p>
         </div>
-        <div className="sandbox-scenario-presets surface">
-          <span>Simulation Presets</span>
-          <div className="scenario-buttons">
-            <button type="button" onClick={() => loadScenario("wilderness")} className="preset-btn">
-              <Trees size={14} /> Natural State
-            </button>
-            <button type="button" onClick={() => loadScenario("sprawl")} className="preset-btn warning-btn">
-              <Flame size={14} /> Unplanned Sprawl
-            </button>
-            <button type="button" onClick={() => loadScenario("sustainable")} className="preset-btn success-btn">
-              <Sparkles size={14} /> Smart Growth
-            </button>
-            <button type="button" onClick={() => loadScenario("ecovillage")} className="preset-btn info-btn">
-              <Leaf size={14} /> Eco-Village
-            </button>
+
+        {/* ── Improved Simulation Presets ── */}
+        <div className="sandbox-presets-card">
+          <div className="sandbox-presets-header">
+            <Zap size={14} aria-hidden />
+            <span>Simulation Presets</span>
+            {activeScenario && (
+              <span className="sandbox-active-badge">
+                {SCENARIO_META[activeScenario].icon}
+                {SCENARIO_META[activeScenario].label} active
+              </span>
+            )}
+          </div>
+          <div className="sandbox-presets-grid">
+            {(Object.entries(SCENARIO_META) as [Exclude<ScenarioKey, null>, typeof SCENARIO_META[keyof typeof SCENARIO_META]][]).map(([key, meta]) => (
+              <button
+                key={key}
+                type="button"
+                id={`sandbox-preset-${key}`}
+                className={`sandbox-preset-tile ${meta.btnClass} ${activeScenario === key ? "active" : ""}`}
+                onClick={() => loadScenario(key)}
+              >
+                <div className="sandbox-preset-icon">{meta.icon}</div>
+                <div className="sandbox-preset-copy">
+                  <strong>{meta.label}</strong>
+                  <span>{meta.desc}</span>
+                </div>
+                {activeScenario === key && (
+                  <span className="sandbox-preset-check" aria-label="Active">
+                    <CheckCircle2 size={14} />
+                  </span>
+                )}
+              </button>
+            ))}
           </div>
         </div>
       </section>
 
+      {/* ── Main Grid Layout: Canvas left, Score+Indicators right ── */}
       <div className="sandbox-grid-layout">
-        <section className="surface sandbox-map-panel">
-          <div className="surface-head">
-            <div>
-              <h2>Interactive Siting Canvas</h2>
-              <p className="muted">Click and drag to paint zones. Clear to restore natural landscape.</p>
-            </div>
-            <div className="canvas-header-actions">
-              <button
-                type="button"
-                className={`btn btn-toggle-paths ${showWildlifePaths ? "active" : ""}`}
-                onClick={() => setShowWildlifePaths(!showWildlifePaths)}
-              >
-                <Compass size={14} /> {showWildlifePaths ? "Hide Pathways" : "Show Pathways"}
-              </button>
-              <button type="button" className="btn btn-reset" onClick={resetAll} aria-label="Reset canvas">
-                <RefreshCcw size={14} /> Reset
-              </button>
-            </div>
-          </div>
 
-          <div className="paint-palette">
-            {Object.values(CELL_META).map((meta) => {
-              const active = selectedTool === meta.type;
-              return (
+        {/* ── Left: Canvas + Policies ── */}
+        <div className="sandbox-canvas-col">
+          <section className="surface sandbox-map-panel">
+            <div className="surface-head">
+              <div>
+                <h2>Interactive Siting Canvas</h2>
+                <p className="muted">Click and drag to paint zones. Clear to restore natural landscape.</p>
+              </div>
+              <div className="canvas-header-actions">
                 <button
                   type="button"
-                  key={meta.type}
-                  className={`palette-item ${active ? "active" : ""}`}
-                  onClick={() => setSelectedTool(meta.type)}
-                  style={{ "--border-color": meta.color } as React.CSSProperties}
-                  title={meta.description}
+                  className={`btn btn-toggle-paths ${showWildlifePaths ? "active" : ""}`}
+                  onClick={() => setShowWildlifePaths(!showWildlifePaths)}
                 >
-                  <span className="palette-color" style={{ backgroundColor: meta.color }} />
-                  <span className="palette-label">{meta.label}</span>
+                  <Compass size={14} /> {showWildlifePaths ? "Hide Pathways" : "Show Pathways"}
                 </button>
-              );
-            })}
-            <button
-              type="button"
-              className={`palette-item erase-tool ${selectedTool === "clear" ? "active" : ""}`}
-              onClick={() => setSelectedTool("clear")}
-              title="Revert cells back to their initial natural vegetation state."
-            >
-              <Trash2 size={14} />
-              <span className="palette-label">Erase / Clear</span>
-            </button>
-          </div>
-
-          <div className="map-grid-container">
-            <div className="grid-labels-row">
-              {Array.from({ length: GRID_SIZE }).map((_, idx) => (
-                <span key={idx} className="grid-label">{String.fromCharCode(65 + idx)}</span>
-              ))}
+                <button type="button" className="btn btn-reset" onClick={resetAll} aria-label="Reset canvas">
+                  <RefreshCcw size={14} /> Reset
+                </button>
+              </div>
             </div>
-            <div className="grid-main-row">
-              <div className="grid-labels-col">
+
+            <div className="paint-palette">
+              {Object.values(CELL_META).map((meta) => {
+                const active = selectedTool === meta.type;
+                return (
+                  <button
+                    type="button"
+                    key={meta.type}
+                    className={`palette-item ${active ? "active" : ""}`}
+                    onClick={() => setSelectedTool(meta.type)}
+                    style={{ "--border-color": meta.color } as React.CSSProperties}
+                    title={meta.description}
+                  >
+                    <span className="palette-color" style={{ backgroundColor: meta.color }} />
+                    <span className="palette-label">{meta.label}</span>
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                className={`palette-item erase-tool ${selectedTool === "clear" ? "active" : ""}`}
+                onClick={() => setSelectedTool("clear")}
+                title="Revert cells back to their initial natural vegetation state."
+              >
+                <Trash2 size={14} />
+                <span className="palette-label">Erase / Clear</span>
+              </button>
+            </div>
+
+            <div className="map-grid-container">
+              <div className="grid-labels-row">
                 {Array.from({ length: GRID_SIZE }).map((_, idx) => (
-                  <span key={idx} className="grid-label">{idx + 1}</span>
+                  <span key={idx} className="grid-label">{String.fromCharCode(65 + idx)}</span>
                 ))}
               </div>
-              <div className="grid-svg-wrapper">
-                <svg
-                  viewBox="0 0 400 400"
-                  width="100%"
-                  height="100%"
-                  role="grid"
-                  aria-label="Planning Sandbox Grid"
-                >
-                  {/* Grid cells */}
-                  {grid.map((cell) => {
-                    const meta = CELL_META[cell.type];
-                    const x = cell.col * 40;
-                    const y = cell.row * 40;
-                    
-                    let cellSymbol = null;
-                    if (cell.type === "dense-forest") {
-                      cellSymbol = (
-                        <circle cx={x + 20} cy={y + 20} r="3" fill="rgba(255,255,255,0.25)" />
-                      );
-                    } else if (cell.type === "water") {
-                      cellSymbol = (
-                        <line x1={x + 10} y1={y + 20} x2={x + 30} y2={y + 20} stroke="rgba(255,255,255,0.22)" strokeWidth="1.5" />
-                      );
-                    } else if (cell.type === "residential") {
-                      cellSymbol = (
-                        <path d={`M ${x+15} ${y+25} L ${x+20} ${y+16} L ${x+25} ${y+25} Z`} fill="rgba(255,255,255,0.5)" />
-                      );
-                    } else if (cell.type === "industrial") {
-                      cellSymbol = (
-                        <rect x={x+15} y={y+16} width="10" height="10" fill="rgba(255,255,255,0.4)" />
-                      );
-                    } else if (cell.type === "green-highway") {
-                      cellSymbol = (
-                        <line x1={x+5} y1={y+20} x2={x+35} y2={y+20} stroke="#ffffff" strokeWidth="2.5" strokeDasharray="3 3" />
-                      );
-                    }
-
-                    return (
-                      <g key={cell.id}>
-                        <rect
-                          x={x}
-                          y={y}
-                          width="38.5"
-                          height="38.5"
-                          rx="4"
-                          fill={meta.color}
-                          className={`sandbox-grid-rect ${meta.bgClass}`}
-                          onMouseDown={() => handleCellMouseDown(cell.id)}
-                          onMouseEnter={() => handleCellMouseEnter(cell.id)}
-                        />
-                        {cellSymbol}
-                      </g>
-                    );
-                  })}
-
-                  {/* Wildlife Corridors Overlay */}
-                  {showWildlifePaths &&
-                    simulation.routesStatus.map((route) => {
-                      const pathString = getSvgPathString(route.coords);
+              <div className="grid-main-row">
+                <div className="grid-labels-col">
+                  {Array.from({ length: GRID_SIZE }).map((_, idx) => (
+                    <span key={idx} className="grid-label">{idx + 1}</span>
+                  ))}
+                </div>
+                <div className="grid-svg-wrapper">
+                  <svg viewBox="0 0 400 400" width="100%" height="100%" role="grid" aria-label="Planning Sandbox Grid">
+                    {grid.map((cell) => {
+                      const meta = CELL_META[cell.type];
+                      const x = cell.col * 40;
+                      const y = cell.row * 40;
+                      let cellSymbol = null;
+                      if (cell.type === "dense-forest") {
+                        cellSymbol = <circle cx={x + 20} cy={y + 20} r="3" fill="rgba(255,255,255,0.25)" />;
+                      } else if (cell.type === "water") {
+                        cellSymbol = <line x1={x + 10} y1={y + 20} x2={x + 30} y2={y + 20} stroke="rgba(255,255,255,0.22)" strokeWidth="1.5" />;
+                      } else if (cell.type === "residential") {
+                        cellSymbol = <path d={`M ${x+15} ${y+25} L ${x+20} ${y+16} L ${x+25} ${y+25} Z`} fill="rgba(255,255,255,0.5)" />;
+                      } else if (cell.type === "industrial") {
+                        cellSymbol = <rect x={x+15} y={y+16} width="10" height="10" fill="rgba(255,255,255,0.4)" />;
+                      } else if (cell.type === "green-highway") {
+                        cellSymbol = <line x1={x+5} y1={y+20} x2={x+35} y2={y+20} stroke="#ffffff" strokeWidth="2.5" strokeDasharray="3 3" />;
+                      }
                       return (
-                        <g key={route.id} className="wildlife-path-group">
-                          {/* Outer glow line */}
-                          <path
-                            d={pathString}
-                            fill="none"
-                            stroke={route.isBlocked ? "rgba(165, 62, 50, 0.32)" : "rgba(31, 122, 76, 0.35)"}
-                            strokeWidth="8"
-                            strokeLinecap="round"
-                            className={route.isBlocked ? "path-glow-blocked" : "path-glow-active"}
+                        <g key={cell.id}>
+                          <rect
+                            x={x} y={y} width="38.5" height="38.5" rx="4"
+                            fill={meta.color}
+                            className={`sandbox-grid-rect ${meta.bgClass}`}
+                            onMouseDown={() => handleCellMouseDown(cell.id)}
+                            onMouseEnter={() => handleCellMouseEnter(cell.id)}
                           />
-                          {/* Core animated dashed line */}
-                          <path
-                            d={pathString}
-                            fill="none"
-                            stroke={route.isBlocked ? "#a53e32" : "#54a36f"}
-                            strokeWidth="3.5"
-                            strokeLinecap="round"
-                            strokeDasharray={route.isBlocked ? "4 8" : "10 12"}
-                            className={`wildlife-path-core ${route.isBlocked ? "blocked" : "active"}`}
-                          />
+                          {cellSymbol}
                         </g>
                       );
                     })}
-                </svg>
+                    {showWildlifePaths && simulation.routesStatus.map((route) => {
+                      const pathString = getSvgPathString(route.coords);
+                      return (
+                        <g key={route.id} className="wildlife-path-group">
+                          <path d={pathString} fill="none" stroke={route.isBlocked ? "rgba(165, 62, 50, 0.32)" : "rgba(31, 122, 76, 0.35)"} strokeWidth="8" strokeLinecap="round" className={route.isBlocked ? "path-glow-blocked" : "path-glow-active"} />
+                          <path d={pathString} fill="none" stroke={route.isBlocked ? "#a53e32" : "#54a36f"} strokeWidth="3.5" strokeLinecap="round" strokeDasharray={route.isBlocked ? "4 8" : "10 12"} className={`wildlife-path-core ${route.isBlocked ? "blocked" : "active"}`} />
+                        </g>
+                      );
+                    })}
+                  </svg>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="grid-legend">
-            <span><i className="legend-wilderness" /> Forest Core</span>
-            <span><i className="legend-water" /> Waterway</span>
-            <span><i className="legend-developed" /> Developed (Urban/Industrial)</span>
-            <span><i className="legend-corridor" /> Green Infrastructure</span>
-          </div>
-        </section>
+            <div className="grid-legend">
+              <span><i className="legend-wilderness" /> Forest Core</span>
+              <span><i className="legend-water" /> Waterway</span>
+              <span><i className="legend-developed" /> Developed (Urban/Industrial)</span>
+              <span><i className="legend-corridor" /> Green Infrastructure</span>
+            </div>
+          </section>
 
+          {/* ── Mitigation Policies (moved under canvas) ── */}
+          <section className="surface policy-toggles-under">
+            <div className="surface-head">
+              <div>
+                <h2>Mitigation Policies</h2>
+                <p className="muted">Enact regulations to buffer development impacts.</p>
+              </div>
+              <SlidersHorizontal size={16} className="text-muted" />
+            </div>
+            <div className="policy-toggles-grid">
+              <label className="toggle-label">
+                <input type="checkbox" checked={policyWildlife} onChange={(e) => setPolicyWildlife(e.target.checked)} />
+                <div className="toggle-copy">
+                  <strong>Wildlife Corridors / Underpasses</strong>
+                  <span>Mitigates fragmentation score and clears highways for animal migration.</span>
+                </div>
+              </label>
+              <label className="toggle-label">
+                <input type="checkbox" checked={policyGreenRoofs} onChange={(e) => setPolicyGreenRoofs(e.target.checked)} />
+                <div className="toggle-copy">
+                  <strong>Urban Canopy / Green Roof Mandate</strong>
+                  <span>Cools residential and industrial thermal LST delta.</span>
+                </div>
+              </label>
+              <label className="toggle-label">
+                <input type="checkbox" checked={policyDrainage} onChange={(e) => setPolicyDrainage(e.target.checked)} />
+                <div className="toggle-copy">
+                  <strong>Eco-Drainage & Bioswales</strong>
+                  <span>Lowers erosion risks associated with soil disturbance.</span>
+                </div>
+              </label>
+            </div>
+          </section>
+        </div>
+
+        {/* ── Right Sidebar: Score + Indicators + Inventory ── */}
         <aside className="sandbox-sidebar flex-column">
           <section className="surface eco-scorecard flex-column align-center text-center">
             <span className="eyebrow">Eco-Planning Health</span>
@@ -775,188 +739,76 @@ export default function PlanningSandbox() {
             </p>
           </section>
 
-          <section className="surface policy-toggles">
-            <div className="surface-head">
-              <div>
-                <h2>Mitigation Policies</h2>
-                <p className="muted">Enact regulations to buffer development impacts.</p>
-              </div>
-              <SlidersHorizontal size={16} className="text-muted" />
-            </div>
-
-            <div className="toggle-list">
-              <label className="toggle-label">
-                <input
-                  type="checkbox"
-                  checked={policyWildlife}
-                  onChange={(e) => setPolicyWildlife(e.target.checked)}
-                />
-                <div className="toggle-copy">
-                  <strong>Wildlife Corridors / Underpasses</strong>
-                  <span>Mitigates fragmentation score and clears highways for animal migration.</span>
-                </div>
-              </label>
-
-              <label className="toggle-label">
-                <input
-                  type="checkbox"
-                  checked={policyGreenRoofs}
-                  onChange={(e) => setPolicyGreenRoofs(e.target.checked)}
-                />
-                <div className="toggle-copy">
-                  <strong>Urban Canopy / Green Roof Mandate</strong>
-                  <span>Cools residential and industrial thermal LST delta.</span>
-                </div>
-              </label>
-
-              <label className="toggle-label">
-                <input
-                  type="checkbox"
-                  checked={policyDrainage}
-                  onChange={(e) => setPolicyDrainage(e.target.checked)}
-                />
-                <div className="toggle-copy">
-                  <strong>Eco-Drainage & Bioswales</strong>
-                  <span>Lowers erosion risks associated with soil disturbance.</span>
-                </div>
-              </label>
-            </div>
-          </section>
-
           <section className="surface indicators-list flex-column gap-12">
             <h2>Simulation Indicators</h2>
 
-            {/* Wildlife Connectivity */}
             <article className="indicator-strip">
               <div className="indicator-summary">
-                <div className="indicator-label-row">
-                  <Compass size={16} />
-                  <span>Wildlife Connectivity</span>
-                </div>
-                <strong className={simulation.connectivityPct > 60 ? "text-success" : simulation.connectivityPct > 30 ? "text-warning" : "text-danger"}>
-                  {simulation.connectivityPct}%
-                </strong>
+                <div className="indicator-label-row"><Compass size={16} /><span>Wildlife Connectivity</span></div>
+                <strong className={simulation.connectivityPct > 60 ? "text-success" : simulation.connectivityPct > 30 ? "text-warning" : "text-danger"}>{simulation.connectivityPct}%</strong>
               </div>
-              <div className="progress-bar">
-                <i className={`bar-fill ${simulation.connectivityPct > 60 ? "fill-success" : simulation.connectivityPct > 30 ? "fill-warning" : "fill-danger"}`} style={{ width: `${simulation.connectivityPct}%` }} />
-              </div>
+              <div className="progress-bar"><i className={`bar-fill ${simulation.connectivityPct > 60 ? "fill-success" : simulation.connectivityPct > 30 ? "fill-warning" : "fill-danger"}`} style={{ width: `${simulation.connectivityPct}%` }} /></div>
               <div className="routes-status-list">
                 {simulation.routesStatus.map((route) => (
                   <div key={route.id} className="route-status-item">
                     <span className={`route-bullet ${route.isBlocked ? "blocked" : "active"}`} />
                     <span className="route-name text-small">{route.name.split(" (")[0]}</span>
-                    <span className={`route-status-label ${route.isBlocked ? "text-danger" : "text-success"}`}>
-                      {route.isBlocked ? "Blocked" : "Clear"}
-                    </span>
+                    <span className={`route-status-label ${route.isBlocked ? "text-danger" : "text-success"}`}>{route.isBlocked ? "Blocked" : "Clear"}</span>
                   </div>
                 ))}
               </div>
             </article>
 
-            {/* Canopy Loss */}
             <article className="indicator-strip">
               <div className="indicator-summary">
-                <div className="indicator-label-row">
-                  <Trees size={16} />
-                  <span>Deforestation (Canopy Loss)</span>
-                </div>
-                <strong className={simulation.canopyLoss > 20 ? "text-danger" : simulation.canopyLoss > 5 ? "text-warning" : "text-success"}>
-                  {simulation.canopyLoss.toFixed(1)}%
-                </strong>
+                <div className="indicator-label-row"><Trees size={16} /><span>Deforestation (Canopy Loss)</span></div>
+                <strong className={simulation.canopyLoss > 20 ? "text-danger" : simulation.canopyLoss > 5 ? "text-warning" : "text-success"}>{simulation.canopyLoss.toFixed(1)}%</strong>
               </div>
-              <div className="progress-bar">
-                <i className={`bar-fill ${simulation.canopyLoss > 20 ? "fill-danger" : simulation.canopyLoss > 5 ? "fill-warning" : "fill-success"}`} style={{ width: `${simulation.canopyLoss}%` }} />
-              </div>
-              <p className="indicator-detail">
-                Natural canopy dropped from {initialStats.canopy.toFixed(0)}% to {simulation.canopyPct.toFixed(0)}% total coverage.
-              </p>
+              <div className="progress-bar"><i className={`bar-fill ${simulation.canopyLoss > 20 ? "fill-danger" : simulation.canopyLoss > 5 ? "fill-warning" : "fill-success"}`} style={{ width: `${simulation.canopyLoss}%` }} /></div>
+              <p className="indicator-detail">Natural canopy dropped from {initialStats.canopy.toFixed(0)}% to {simulation.canopyPct.toFixed(0)}% total coverage.</p>
             </article>
 
-            {/* Fragmentation */}
             <article className="indicator-strip">
               <div className="indicator-summary">
-                <div className="indicator-label-row">
-                  <Activity size={16} />
-                  <span>Forest Fragmentation</span>
-                </div>
-                <strong className={simulation.fragmentationIndex > 45 ? "text-danger" : simulation.fragmentationIndex > 15 ? "text-warning" : "text-success"}>
-                  {simulation.fragmentationIndex}%
-                </strong>
+                <div className="indicator-label-row"><Activity size={16} /><span>Forest Fragmentation</span></div>
+                <strong className={simulation.fragmentationIndex > 45 ? "text-danger" : simulation.fragmentationIndex > 15 ? "text-warning" : "text-success"}>{simulation.fragmentationIndex}%</strong>
               </div>
-              <div className="progress-bar">
-                <i className={`bar-fill ${simulation.fragmentationIndex > 45 ? "fill-danger" : simulation.fragmentationIndex > 15 ? "fill-warning" : "fill-success"}`} style={{ width: `${simulation.fragmentationIndex}%` }} />
-              </div>
-              <p className="indicator-detail">
-                Forest is split into <strong>{simulation.forestPatches} separate clusters</strong>. Corridors are {simulation.forestPatches > 1 ? "severed" : "connected"}.
-              </p>
+              <div className="progress-bar"><i className={`bar-fill ${simulation.fragmentationIndex > 45 ? "fill-danger" : simulation.fragmentationIndex > 15 ? "fill-warning" : "fill-success"}`} style={{ width: `${simulation.fragmentationIndex}%` }} /></div>
+              <p className="indicator-detail">Forest is split into <strong>{simulation.forestPatches} separate clusters</strong>. Corridors are {simulation.forestPatches > 1 ? "severed" : "connected"}.</p>
             </article>
 
-            {/* LST Delta */}
             <article className="indicator-strip">
               <div className="indicator-summary">
-                <div className="indicator-label-row">
-                  <Thermometer size={16} />
-                  <span>Heat Island (LST Delta)</span>
-                </div>
-                <strong className={simulation.lstDelta > 1.2 ? "text-danger" : simulation.lstDelta > 0.1 ? "text-warning" : "text-success"}>
-                  {simulation.lstDelta >= 0 ? "+" : ""}{simulation.lstDelta.toFixed(2)}°C
-                </strong>
+                <div className="indicator-label-row"><Thermometer size={16} /><span>Heat Island (LST Delta)</span></div>
+                <strong className={simulation.lstDelta > 1.2 ? "text-danger" : simulation.lstDelta > 0.1 ? "text-warning" : "text-success"}>{simulation.lstDelta >= 0 ? "+" : ""}{simulation.lstDelta.toFixed(2)}°C</strong>
               </div>
-              <div className="progress-bar">
-                <i
-                  className={`bar-fill ${simulation.lstDelta > 1.2 ? "fill-danger" : simulation.lstDelta > 0.1 ? "fill-warning" : "fill-success"}`}
-                  style={{ width: `${Math.max(0, Math.min(100, (simulation.lstDelta + 2) * 20))}%` }}
-                />
-              </div>
-              <p className="indicator-detail">
-                Average thermal delta relative to baseline natural landscape temperature.
-              </p>
+              <div className="progress-bar"><i className={`bar-fill ${simulation.lstDelta > 1.2 ? "fill-danger" : simulation.lstDelta > 0.1 ? "fill-warning" : "fill-success"}`} style={{ width: `${Math.max(0, Math.min(100, (simulation.lstDelta + 2) * 20))}%` }} /></div>
+              <p className="indicator-detail">Average thermal delta relative to baseline natural landscape temperature.</p>
             </article>
 
-            {/* Soil Exposure / Erosion */}
             <article className="indicator-strip">
               <div className="indicator-summary">
-                <div className="indicator-label-row">
-                  <Waves size={16} />
-                  <span>Erosion Risk (Exposed Soil)</span>
-                </div>
-                <strong className={simulation.soilRiskScore > 40 ? "text-danger" : simulation.soilRiskScore > 15 ? "text-warning" : "text-success"}>
-                  {simulation.soilRiskScore.toFixed(0)}/100
-                </strong>
+                <div className="indicator-label-row"><Waves size={16} /><span>Erosion Risk (Exposed Soil)</span></div>
+                <strong className={simulation.soilRiskScore > 40 ? "text-danger" : simulation.soilRiskScore > 15 ? "text-warning" : "text-success"}>{simulation.soilRiskScore.toFixed(0)}/100</strong>
               </div>
-              <div className="progress-bar">
-                <i className={`bar-fill ${simulation.soilRiskScore > 40 ? "fill-danger" : simulation.soilRiskScore > 15 ? "fill-warning" : "fill-success"}`} style={{ width: `${simulation.soilRiskScore}%` }} />
-              </div>
-              <p className="indicator-detail">
-                Calculated runoff danger from bare ground ratio ({simulation.bareSoilPct.toFixed(0)}% exposed soil).
-              </p>
+              <div className="progress-bar"><i className={`bar-fill ${simulation.soilRiskScore > 40 ? "fill-danger" : simulation.soilRiskScore > 15 ? "fill-warning" : "fill-success"}`} style={{ width: `${simulation.soilRiskScore}%` }} /></div>
+              <p className="indicator-detail">Calculated runoff danger from bare ground ratio ({simulation.bareSoilPct.toFixed(0)}% exposed soil).</p>
             </article>
           </section>
 
           <section className="surface footprint-inventory">
             <h2>Placement Inventory</h2>
             <div className="inventory-grid">
-              <div>
-                <span>Homes</span>
-                <strong>{simulation.residentialCount} blocks</strong>
-              </div>
-              <div>
-                <span>Industry/Mining</span>
-                <strong>{simulation.industrialCount} blocks</strong>
-              </div>
-              <div>
-                <span>Infrastructure</span>
-                <strong>{simulation.roadCount} blocks</strong>
-              </div>
-              <div>
-                <span>Forest Sectors</span>
-                <strong>{simulation.forestCount} blocks</strong>
-              </div>
+              <div><span>Homes</span><strong>{simulation.residentialCount} blocks</strong></div>
+              <div><span>Industry/Mining</span><strong>{simulation.industrialCount} blocks</strong></div>
+              <div><span>Infrastructure</span><strong>{simulation.roadCount} blocks</strong></div>
+              <div><span>Forest Sectors</span><strong>{simulation.forestCount} blocks</strong></div>
             </div>
           </section>
         </aside>
       </div>
 
+      {/* ── Guidelines ── */}
       <section className="surface sandbox-guidelines">
         <div className="surface-head">
           <div>
@@ -969,26 +821,17 @@ export default function PlanningSandbox() {
           <article>
             <CheckCircle2 className="text-success" size={18} />
             <strong>A-Grade Siting Policy</strong>
-            <p>
-              Restrict built-up spaces to the outer edges. Slicing through the central woodland with highways
-              increases forest fragmentation scores and drops the final health score.
-            </p>
+            <p>Restrict built-up spaces to the outer edges. Slicing through the central woodland with highways increases forest fragmentation scores and drops the final health score.</p>
           </article>
           <article>
             <AlertTriangle className="text-warning" size={18} />
             <strong>Thermal Heat Abatement</strong>
-            <p>
-              Residential and industrial spaces increase local temperature up to +4.5°C. Enact the Green Roof Mandate
-              and cluster residential zones near forest borders to cool the heat footprint.
-            </p>
+            <p>Residential and industrial spaces increase local temperature up to +4.5°C. Enact the Green Roof Mandate and cluster residential zones near forest borders to cool the heat footprint.</p>
           </article>
           <article>
             <ShieldAlert className="text-danger" size={18} />
             <strong>Soil Preservation</strong>
-            <p>
-              Excess industrial excavation exposes bare soil. Enable bioswales and restrict mining footprints to avoid
-              high erosion and heavy sediment runoff penalties.
-            </p>
+            <p>Excess industrial excavation exposes bare soil. Enable bioswales and restrict mining footprints to avoid high erosion and heavy sediment runoff penalties.</p>
           </article>
         </div>
       </section>
