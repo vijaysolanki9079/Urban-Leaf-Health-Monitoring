@@ -55,10 +55,13 @@ export default function RecommendationDashboard({ data }: { data: Recommendation
             so the project can answer where development pressure should be kept lowest.
           </p>
         </div>
-        <div className="recommendation-headline surface">
-          <span>Primary recommendation</span>
-          <strong>{data.recommendation.headline}</strong>
-          <p>{data.recommendation.summary}</p>
+        <div className="recommendation-headline-card">
+          <div className="recommendation-headline-img" />
+          <div className="recommendation-headline-body">
+            <span className="rec-eyebrow">Primary recommendation</span>
+            <strong className="rec-headline">{data.recommendation.headline}</strong>
+            <p className="rec-summary">{data.recommendation.summary}</p>
+          </div>
         </div>
       </section>
 

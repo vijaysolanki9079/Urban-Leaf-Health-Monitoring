@@ -1,7 +1,9 @@
 "use client";
 
-import { ChangeEvent, useEffect, useRef, useState, useTransition } from "react";
-import { ArrowUpFromLine, Layers3, SplitSquareVertical, Trees, Waves } from "lucide-react";
+import { ChangeEvent, useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { ArrowUpFromLine, CheckCircle2, ImagePlus, Layers3, SplitSquareVertical, Trees, TriangleAlert, Waves, X } from "lucide-react";
+
+/* ─────────────────── Types ─────────────────── */
 
 type ClassKey = 0 | 1 | 2 | 3 | 4;
 
@@ -31,6 +33,11 @@ type SegmentationResult = {
   waterShadowShare: number;
 };
 
+type ToastKind = "success" | "error" | "info";
+type Toast = { id: number; kind: ToastKind; title: string; message: string };
+
+/* ─────────────────── Constants ─────────────────── */
+
 const CLASS_META: Array<{ id: ClassKey; name: string; color: [number, number, number] }> = [
   { id: 0, name: "Vegetation", color: [27, 128, 69] },
   { id: 1, name: "Sparse Vegetation", color: [166, 217, 106] },
@@ -54,101 +61,10 @@ const SAMPLE_IMAGES = [
   }
 ];
 
-function clamp01(value: number) {
-  return Math.min(1, Math.max(0, value));
-}
+const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/webp"];
+const MAX_FILE_MB = 30;
 
-function rgbToHsv(r: number, g: number, b: number) {
-  const rn = r / 255;
-  const gn = g / 255;
-  const bn = b / 255;
-  const max = Math.max(rn, gn, bn);
-  const min = Math.min(rn, gn, bn);
-  const delta = max - min;
-  let h = 0;
-
-  if (delta) {
-    if (max === rn) h = ((gn - bn) / delta) % 6;
-    else if (max === gn) h = (bn - rn) / delta + 2;
-    else h = (rn - gn) / delta + 4;
-  }
-
-  return {
-    h: (h * 60 + 360) % 360,
-    s: max === 0 ? 0 : delta / max,
-    v: max
-  };
-}
-
-function classifyReference(r: number, g: number, b: number): ClassKey {
-  const { h, s, v } = rgbToHsv(r, g, b);
-  const exg = (2 * g - r - b) / 255;
-  const blueDominance = (b - Math.max(r, g)) / 255;
-  const warmth = (r - b) / 255;
-
-  if (v < 0.2 || (blueDominance > 0.08 && s < 0.45)) return 4;
-  if (exg > 0.16 && h >= 65 && h <= 165) return v > 0.46 ? 0 : 1;
-  if (s < 0.16 && v > 0.42) return 3;
-  if (warmth > 0.1 && v > 0.35) return 2;
-  if (h >= 75 && h <= 150) return 1;
-  return v > 0.58 ? 3 : 2;
-}
-
-function classifyProject(r: number, g: number, b: number): ClassKey {
-  const { h, s, v } = rgbToHsv(r, g, b);
-  const greenBoost = (g - (r + b) / 2) / 255;
-  const dryness = (r - g) / 255 + (Math.abs(r - b) / 255) * 0.4;
-  const waterCue = (b - r) / 255;
-  const brightNeutral = s < 0.14 && v > 0.48;
-
-  if (v < 0.18 || (waterCue > 0.09 && s < 0.52)) return 4;
-  if (greenBoost > 0.12 && h >= 68 && h <= 150) return v > 0.42 ? 0 : 1;
-  if (dryness > 0.14 && v > 0.28) return 2;
-  if (brightNeutral || (s < 0.22 && v > 0.36)) return 3;
-  if (h >= 70 && h <= 145) return 1;
-  return v > 0.52 ? 3 : 2;
-}
-
-function smoothMask(mask: Uint8Array, width: number, height: number) {
-  const output = new Uint8Array(mask);
-  for (let y = 1; y < height - 1; y += 1) {
-    for (let x = 1; x < width - 1; x += 1) {
-      const counts = [0, 0, 0, 0, 0];
-      for (let ky = -1; ky <= 1; ky += 1) {
-        for (let kx = -1; kx <= 1; kx += 1) {
-          counts[mask[(y + ky) * width + (x + kx)]] += 1;
-        }
-      }
-      let best: ClassKey = 0;
-      let bestCount = -1;
-      for (let index = 0; index < counts.length; index += 1) {
-        if (counts[index] > bestCount) {
-          best = index as ClassKey;
-          bestCount = counts[index];
-        }
-      }
-      output[y * width + x] = best;
-    }
-  }
-  return output;
-}
-
-function summarizeMask(mask: Uint8Array): ClassSummary[] {
-  const total = mask.length || 1;
-  return CLASS_META.map((item) => {
-    let pixels = 0;
-    for (let index = 0; index < mask.length; index += 1) {
-      if (mask[index] === item.id) pixels += 1;
-    }
-    return {
-      id: item.id,
-      name: item.name,
-      color: `rgb(${item.color.join(", ")})`,
-      pixels,
-      ratio: pixels / total
-    };
-  });
-}
+/* ─────────────────── Core rendering helpers ─────────────────── */
 
 function renderMask(mask: Uint8Array, width: number, height: number) {
   const canvas = document.createElement("canvas");
@@ -197,7 +113,7 @@ function loadImage(url: string) {
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error("Unable to load image."));
+    img.onerror = () => reject(new Error("Unable to load image. Check the file format or try another image."));
     img.src = url;
   });
 }
@@ -216,51 +132,128 @@ async function runComparison(sourceUrl: string, sourceLabel: string): Promise<Se
 
   ctx.drawImage(image, 0, 0, width, height);
   const imageData = ctx.getImageData(0, 0, width, height);
-  const referenceMask = new Uint8Array(width * height);
-  const projectMask = new Uint8Array(width * height);
 
-  for (let index = 0; index < width * height; index += 1) {
-    const offset = index * 4;
-    const r = imageData.data[offset];
-    const g = imageData.data[offset + 1];
-    const b = imageData.data[offset + 2];
-    referenceMask[index] = classifyReference(r, g, b);
-    projectMask[index] = classifyProject(r, g, b);
-  }
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(new URL("./segmentation.worker.ts", import.meta.url));
 
-  const referenceSmoothed = smoothMask(referenceMask, width, height);
-  const projectSmoothed = smoothMask(projectMask, width, height);
-  let agreement = 0;
+    worker.onmessage = (event) => {
+      const {
+        referenceSmoothed,
+        projectSmoothed,
+        referenceSummary,
+        projectSummary,
+        canopyCover,
+        builtUpShare,
+        exposedSurface,
+        waterShadowShare,
+        agreement
+      } = event.data;
 
-  for (let index = 0; index < referenceSmoothed.length; index += 1) {
-    if (referenceSmoothed[index] === projectSmoothed[index]) agreement += 1;
-  }
+      try {
+        resolve({
+          sourceUrl,
+          sourceLabel,
+          referenceMaskUrl: renderMask(referenceSmoothed, width, height),
+          referenceOverlayUrl: renderOverlay(imageData, referenceSmoothed, width, height),
+          projectMaskUrl: renderMask(projectSmoothed, width, height),
+          projectOverlayUrl: renderOverlay(imageData, projectSmoothed, width, height),
+          width,
+          height,
+          agreement,
+          referenceSummary,
+          projectSummary,
+          canopyCover,
+          builtUpShare,
+          exposedSurface,
+          waterShadowShare
+        });
+      } catch (err) {
+        reject(err);
+      } finally {
+        worker.terminate();
+      }
+    };
 
-  const referenceSummary = summarizeMask(referenceSmoothed);
-  const projectSummary = summarizeMask(projectSmoothed);
-  const canopyCover = clamp01(projectSummary[0].ratio + projectSummary[1].ratio) * 100;
-  const builtUpShare = projectSummary[3].ratio * 100;
-  const exposedSurface = (projectSummary[2].ratio + projectSummary[3].ratio) * 100;
-  const waterShadowShare = projectSummary[4].ratio * 100;
+    worker.onerror = (errorEvent) => {
+      reject(new Error(errorEvent.message ?? "Worker crashed during segmentation."));
+      worker.terminate();
+    };
 
-  return {
-    sourceUrl,
-    sourceLabel,
-    referenceMaskUrl: renderMask(referenceSmoothed, width, height),
-    referenceOverlayUrl: renderOverlay(imageData, referenceSmoothed, width, height),
-    projectMaskUrl: renderMask(projectSmoothed, width, height),
-    projectOverlayUrl: renderOverlay(imageData, projectSmoothed, width, height),
-    width,
-    height,
-    agreement: (agreement / referenceSmoothed.length) * 100,
-    referenceSummary,
-    projectSummary,
-    canopyCover,
-    builtUpShare,
-    exposedSurface,
-    waterShadowShare
-  };
+    const pixelData = new Uint8ClampedArray(imageData.data);
+    worker.postMessage({ imageDataArray: pixelData, width, height }, [pixelData.buffer]);
+  });
 }
+
+/* ─────────────────── Toast component ─────────────────── */
+
+function ToastIcon({ kind }: { kind: ToastKind }) {
+  if (kind === "success") return <CheckCircle2 size={18} aria-hidden />;
+  if (kind === "error") return <TriangleAlert size={18} aria-hidden />;
+  return <ImagePlus size={18} aria-hidden />;
+}
+
+function ToastItem({
+  toast,
+  onDismiss
+}: {
+  toast: Toast;
+  onDismiss: (id: number) => void;
+}) {
+  const [exiting, setExiting] = useState(false);
+
+  const dismiss = useCallback(() => {
+    setExiting(true);
+    setTimeout(() => onDismiss(toast.id), 320);
+  }, [onDismiss, toast.id]);
+
+  useEffect(() => {
+    const timer = setTimeout(dismiss, 4500);
+    return () => clearTimeout(timer);
+  }, [dismiss]);
+
+  return (
+    <div
+      role="alert"
+      aria-live="assertive"
+      className={`seg-toast seg-toast--${toast.kind}${exiting ? " seg-toast--exit" : ""}`}
+    >
+      <span className="seg-toast-icon">
+        <ToastIcon kind={toast.kind} />
+      </span>
+      <div className="seg-toast-body">
+        <strong>{toast.title}</strong>
+        <p>{toast.message}</p>
+      </div>
+      <button
+        type="button"
+        className="seg-toast-close"
+        aria-label="Dismiss notification"
+        onClick={dismiss}
+      >
+        <X size={14} />
+      </button>
+    </div>
+  );
+}
+
+function ToastStack({
+  toasts,
+  onDismiss
+}: {
+  toasts: Toast[];
+  onDismiss: (id: number) => void;
+}) {
+  if (toasts.length === 0) return null;
+  return (
+    <div className="seg-toast-stack" aria-label="Notifications">
+      {toasts.map((t) => (
+        <ToastItem key={t.id} toast={t} onDismiss={onDismiss} />
+      ))}
+    </div>
+  );
+}
+
+/* ─────────────────── Summary bars ─────────────────── */
 
 function SummaryBars({ title, summary }: { title: string; summary: ClassSummary[] }) {
   return (
@@ -281,51 +274,115 @@ function SummaryBars({ title, summary }: { title: string; summary: ClassSummary[
   );
 }
 
+/* ─────────────────── Main page ─────────────────── */
+
+let toastCounter = 0;
+
 export default function SegmentationLabPage() {
   const uploadUrlRef = useRef<string | null>(null);
+  const resultsRef = useRef<HTMLElement | null>(null);
   const [result, setResult] = useState<SegmentationResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [toasts, setToasts] = useState<Toast[]>([]);
 
-  useEffect(() => {
-    startTransition(() => {
-      void runComparison(SAMPLE_IMAGES[0].url, SAMPLE_IMAGES[0].label)
-        .then(setResult)
-        .catch((err: Error) => setError(err.message));
-    });
+  /* Toast helpers */
+  const addToast = useCallback((kind: ToastKind, title: string, message: string) => {
+    toastCounter += 1;
+    const id = toastCounter;
+    setToasts((prev) => [...prev, { id, kind, title, message }]);
   }, []);
 
+  const dismissToast = useCallback((id: number) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  /* Scroll to results once they arrive */
+  useEffect(() => {
+    if (result && resultsRef.current) {
+      resultsRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [result]);
+
+  /* Revoke object URL on unmount */
   useEffect(() => {
     return () => {
       if (uploadUrlRef.current) URL.revokeObjectURL(uploadUrlRef.current);
     };
   }, []);
 
+  /* Initial sample load (silent – no toast) */
+  useEffect(() => {
+    startTransition(() => {
+      void runComparison(SAMPLE_IMAGES[0].url, SAMPLE_IMAGES[0].label)
+        .then(setResult)
+        .catch(() => {/* silent initial load failure */});
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function handleSample(url: string, label: string) {
-    setError(null);
+    addToast("info", "Loading scene", `Preparing "${label}" for segmentation…`);
     startTransition(() => {
       void runComparison(url, label)
-        .then(setResult)
-        .catch((err: Error) => setError(err.message));
+        .then((res) => {
+          setResult(res);
+          addToast("success", "Segmentation complete", `"${label}" analysed — ${res.canopyCover.toFixed(1)}% canopy detected.`);
+        })
+        .catch((err: Error) => {
+          addToast("error", "Segmentation failed", err.message);
+        });
     });
   }
 
   function handleUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
+
+    /* Validate file type */
+    if (!ACCEPTED_TYPES.includes(file.type)) {
+      addToast("error", "Unsupported format", `"${file.name}" is not a PNG, JPEG, or WebP image.`);
+      event.target.value = "";
+      return;
+    }
+
+    /* Validate file size */
+    if (file.size > MAX_FILE_MB * 1024 * 1024) {
+      addToast("error", "File too large", `Maximum upload size is ${MAX_FILE_MB} MB. Your file is ${(file.size / 1024 / 1024).toFixed(1)} MB.`);
+      event.target.value = "";
+      return;
+    }
+
     if (uploadUrlRef.current) URL.revokeObjectURL(uploadUrlRef.current);
     const objectUrl = URL.createObjectURL(file);
     uploadUrlRef.current = objectUrl;
-    setError(null);
+
+    addToast("info", "Image uploaded", `"${file.name}" received — starting segmentation on background thread…`);
+
     startTransition(() => {
       void runComparison(objectUrl, file.name)
-        .then(setResult)
-        .catch((err: Error) => setError(err.message));
+        .then((res) => {
+          setResult(res);
+          addToast(
+            "success",
+            "Analysis ready",
+            `"${file.name}" — ${res.canopyCover.toFixed(1)}% canopy · ${res.builtUpShare.toFixed(1)}% built-up · ${res.agreement.toFixed(1)}% engine agreement.`
+          );
+        })
+        .catch((err: Error) => {
+          addToast("error", "Upload processing failed", err.message);
+        });
     });
+
+    /* Reset input so the same file can be re-selected */
+    event.target.value = "";
   }
 
   return (
     <main className="page segmentation-page">
+      {/* ── Toast portal ── */}
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
+
+      {/* ── Hero ── */}
       <section className="seg-hero">
         <div>
           <span className="badge">Model comparison lab</span>
@@ -336,14 +393,25 @@ export default function SegmentationLabPage() {
           </p>
         </div>
         <div className="seg-actions">
-          <label className="seg-upload">
+          <label className="seg-upload" id="seg-upload-label">
             <ArrowUpFromLine size={18} aria-hidden />
             <span>Upload image</span>
-            <input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleUpload} />
+            <input
+              id="seg-upload-input"
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={handleUpload}
+              aria-labelledby="seg-upload-label"
+            />
           </label>
           <div className="seg-samples">
             {SAMPLE_IMAGES.map((item) => (
-              <button key={item.label} type="button" onClick={() => handleSample(item.url, item.label)}>
+              <button
+                key={item.label}
+                type="button"
+                id={`seg-sample-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
+                onClick={() => handleSample(item.url, item.label)}
+              >
                 {item.label}
               </button>
             ))}
@@ -351,6 +419,7 @@ export default function SegmentationLabPage() {
         </div>
       </section>
 
+      {/* ── Info cards ── */}
       <section className="seg-note surface">
         <div className="seg-note-grid">
           <article>
@@ -371,30 +440,58 @@ export default function SegmentationLabPage() {
         </div>
       </section>
 
-      {error ? <section className="surface model-empty"><strong>{error}</strong></section> : null}
+      {/* ── Worker banner ── */}
+      {isPending && (
+        <section className="seg-worker-banner" aria-live="polite" aria-busy="true">
+          <span className="seg-worker-spinner" aria-hidden="true" />
+          <div>
+            <strong>Web Worker running&nbsp;&mdash;&nbsp;background thread</strong>
+            <p>Pixel classification and mask smoothing are running in a dedicated Worker thread. The UI stays fully responsive.</p>
+          </div>
+        </section>
+      )}
 
-      <section className="seg-results-grid">
+      {/* ── Results ── */}
+      <section
+        className="seg-results-grid"
+        ref={resultsRef}
+        id="seg-results"
+        aria-label="Segmentation results"
+      >
         <article className="surface seg-panel">
           <div className="surface-head">
             <div>
               <h2>Input frame</h2>
-              <p className="muted">{result?.sourceLabel ?? "Preparing sample image..."}</p>
+              <p className="muted">{result?.sourceLabel ?? "Preparing sample image…"}</p>
             </div>
-            <span className="badge">{isPending ? "Running" : result ? `${result.width} x ${result.height}` : "Idle"}</span>
+            <span className="badge">
+              {isPending ? "Running" : result ? `${result.width} × ${result.height}` : "Idle"}
+            </span>
           </div>
-          {result ? <img className="seg-image" src={result.sourceUrl} alt={result.sourceLabel} /> : <div className="seg-placeholder" />}
+
+          {result ? (
+            <img className="seg-image" src={result.sourceUrl} alt={result.sourceLabel} />
+          ) : isPending ? (
+            <div className="seg-skeleton">
+              <div className="seg-skeleton-img" />
+              <div className="seg-skeleton-lines"><span /><span /><span /></div>
+            </div>
+          ) : (
+            <div className="seg-placeholder" />
+          )}
+
           <div className="seg-kpis">
             <div>
               <span>Agreement</span>
-              <strong>{result ? `${result.agreement.toFixed(1)}%` : "..."}</strong>
+              <strong>{result ? `${result.agreement.toFixed(1)}%` : "…"}</strong>
             </div>
             <div>
               <span>Canopy estimate</span>
-              <strong>{result ? `${result.canopyCover.toFixed(1)}%` : "..."}</strong>
+              <strong>{result ? `${result.canopyCover.toFixed(1)}%` : "…"}</strong>
             </div>
             <div>
               <span>Water / shadow</span>
-              <strong>{result ? `${result.waterShadowShare.toFixed(1)}%` : "..."}</strong>
+              <strong>{result ? `${result.waterShadowShare.toFixed(1)}%` : "…"}</strong>
             </div>
           </div>
         </article>
@@ -406,7 +503,18 @@ export default function SegmentationLabPage() {
               <p className="muted">Baseline output for side-by-side comparison.</p>
             </div>
           </div>
-          {result ? <img className="seg-image" src={result.referenceOverlayUrl} alt="Reference segmentation overlay" /> : <div className="seg-placeholder" />}
+          {result ? (
+            <img className="seg-image" src={result.referenceOverlayUrl} alt="Reference segmentation overlay" />
+          ) : (
+            <div className={isPending ? "seg-skeleton" : "seg-placeholder"}>
+              {isPending && (
+                <>
+                  <div className="seg-skeleton-img" />
+                  <div className="seg-skeleton-lines"><span /><span /><span /></div>
+                </>
+              )}
+            </div>
+          )}
           {result ? <img className="seg-image secondary" src={result.referenceMaskUrl} alt="Reference segmentation mask" /> : null}
           {result ? <SummaryBars title="Class distribution" summary={result.referenceSummary} /> : null}
         </article>
@@ -419,13 +527,25 @@ export default function SegmentationLabPage() {
             </div>
             <span className="badge insight-badge">Website-ready</span>
           </div>
-          {result ? <img className="seg-image" src={result.projectOverlayUrl} alt="Project segmentation overlay" /> : <div className="seg-placeholder" />}
+          {result ? (
+            <img className="seg-image" src={result.projectOverlayUrl} alt="Project segmentation overlay" />
+          ) : (
+            <div className={isPending ? "seg-skeleton" : "seg-placeholder"}>
+              {isPending && (
+                <>
+                  <div className="seg-skeleton-img" />
+                  <div className="seg-skeleton-lines"><span /><span /><span /></div>
+                </>
+              )}
+            </div>
+          )}
           {result ? <img className="seg-image secondary" src={result.projectMaskUrl} alt="Project segmentation mask" /> : null}
           {result ? <SummaryBars title="Class distribution" summary={result.projectSummary} /> : null}
         </article>
       </section>
 
-      <section className="surface seg-metrics-surface">
+      {/* ── Derived indicators ── */}
+      <section className="surface seg-metrics-surface" id="seg-indicators">
         <div className="surface-head">
           <div>
             <h2>Derived scene indicators</h2>
@@ -435,22 +555,22 @@ export default function SegmentationLabPage() {
         <div className="seg-indicator-grid">
           <article>
             <span><Trees size={15} aria-hidden /> Canopy cover</span>
-            <strong>{result ? `${result.canopyCover.toFixed(1)}%` : "..."}</strong>
+            <strong>{result ? `${result.canopyCover.toFixed(1)}%` : "…"}</strong>
             <p>Vegetation plus sparse vegetation share from the project segmentation.</p>
           </article>
           <article>
             <span><Layers3 size={15} aria-hidden /> Built-up share</span>
-            <strong>{result ? `${result.builtUpShare.toFixed(1)}%` : "..."}</strong>
+            <strong>{result ? `${result.builtUpShare.toFixed(1)}%` : "…"}</strong>
             <p>Urban or impervious class share inside the uploaded scene.</p>
           </article>
           <article>
             <span><SplitSquareVertical size={15} aria-hidden /> Exposed surface</span>
-            <strong>{result ? `${result.exposedSurface.toFixed(1)}%` : "..."}</strong>
+            <strong>{result ? `${result.exposedSurface.toFixed(1)}%` : "…"}</strong>
             <p>Bare soil plus built-up pixels, useful for disturbance-style interpretation.</p>
           </article>
           <article>
             <span><Waves size={15} aria-hidden /> Water / shadow</span>
-            <strong>{result ? `${result.waterShadowShare.toFixed(1)}%` : "..."}</strong>
+            <strong>{result ? `${result.waterShadowShare.toFixed(1)}%` : "…"}</strong>
             <p>Low-light and water-like regions that influence scene readability.</p>
           </article>
         </div>
