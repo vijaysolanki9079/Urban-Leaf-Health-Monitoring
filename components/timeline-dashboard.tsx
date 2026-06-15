@@ -96,7 +96,7 @@ type SignalCard = {
 
 // ── Interactive Before/After Slider ──
 function ComparisonSlider({ before, after }: { before?: ImageRecord; after?: ImageRecord }) {
-  const [sliderPos, setSliderPos] = useState(50);
+  const [sliderPos, setSliderPos] = useState(90);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
 
