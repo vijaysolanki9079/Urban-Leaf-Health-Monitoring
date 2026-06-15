@@ -1,6 +1,7 @@
 <div align="center">
 
-<img src="assets/presentation_images/1.Setting-ROI-coordinates.png" alt="Urban Leaf Banner" width="100%" style="border-radius: 12px;" />
+<img width="2846" height="1452" alt="image" src="https://github.com/user-attachments/assets/48bd775d-4fe1-4ee0-a93a-601dd9e0c5c5" />
+
 
 <br/><br/>
 
@@ -83,7 +84,8 @@ By integrating cloud-masked data ingestion from **Google Earth Engine**, a **14-
 
 ### ☁️ Cloud Masking — Before & After
 
-<img src="assets/presentation_images/2.Cloud-problem-removed.png" alt="Cloud Problem Removed" width="100%" />
+<img width="1806" height="624" alt="image" src="https://github.com/user-attachments/assets/6b5f1e8b-2403-4de0-a8f7-8a2762a3c4c9" />
+
 
 > Applying `QA60` cloud and cirrus masking ensures downstream vegetation analysis is not polluted by cloud shadows.
 
@@ -91,26 +93,19 @@ By integrating cloud-masked data ingestion from **Google Earth Engine**, a **14-
 
 ### 📉 Vegetation Degradation — NDVI Analysis
 
-<img src="assets/presentation_images/3.Degradation-NDVI.png" alt="NDVI Degradation" width="100%" />
+<img width="1796" height="672" alt="image" src="https://github.com/user-attachments/assets/4be70f7f-f8cd-4737-bbe8-9bbed125df27" />
+
 
 > NDVI-based degradation visualization exposing deforestation signals in the Hasdeo Forest between 2018–2023.
-
----
-
-### 🔬 Better Degradation Viewing
-
-<img src="assets/presentation_images/4.Better-viewing-Degradation.png" alt="Better Degradation View" width="100%" />
-
-> Enhanced rendering of the degradation map with a diverging colour scale to highlight disturbance zones.
 
 ---
 
 ### 📈 Year-Wise Comparison Results
 
 <div align="center">
-  <img src="assets/year_wise_comparison/forest_loss.png" alt="Forest Loss" width="48%" />
+  <img width="1712" height="1174" alt="image" src="https://github.com/user-attachments/assets/7c6c35b2-ea88-4a6d-bc36-3ded354f0d13" />
   &nbsp;
-  <img src="assets/year_wise_comparison/class_separability.png" alt="Class Separability" width="48%" />
+  <img src="assets/year_wise_comparison/class_separability.png" alt="Class Separability" width="1200" height="1000" />
 </div>
 
 > *(Left)* Cumulative forest loss chart across the Hasdeo timeline. *(Right)* Class separability matrix validating spectral feature quality.
