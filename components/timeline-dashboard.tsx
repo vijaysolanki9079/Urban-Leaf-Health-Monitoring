@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import {
   Activity,
   ArrowDownRight,
+  ArrowLeftRight,
   ArrowUpRight,
   CalendarRange,
   Cpu,
@@ -93,6 +94,106 @@ type SignalCard = {
   detail: string;
 };
 
+// ── Interactive Before/After Slider ──
+function ComparisonSlider({ before, after }: { before?: ImageRecord; after?: ImageRecord }) {
+  const [sliderPos, setSliderPos] = useState(50);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleMove = useCallback((clientX: number) => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const x = Math.max(0, Math.min(clientX - rect.left, rect.width));
+    setSliderPos((x / rect.width) * 100);
+  }, []);
+
+  const onMouseDown = useCallback(() => setIsDragging(true), []);
+  const onMouseUp = useCallback(() => setIsDragging(false), []);
+
+  useEffect(() => {
+    if (!isDragging) return;
+    const onUp = () => setIsDragging(false);
+    const onMove = (e: MouseEvent | TouchEvent) => {
+      const clientX = "touches" in e ? e.touches[0].clientX : (e as MouseEvent).clientX;
+      handleMove(clientX);
+    };
+    window.addEventListener("mouseup", onUp);
+    window.addEventListener("touchend", onUp);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("touchmove", onMove);
+    return () => {
+      window.removeEventListener("mouseup", onUp);
+      window.removeEventListener("touchend", onUp);
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("touchmove", onMove);
+    };
+  }, [isDragging, handleMove]);
+
+  if (!before && !after) {
+    return <div className="status-line">No matching images for this timeline.</div>;
+  }
+
+  return (
+    <div className="comparison-slider-container" ref={containerRef}>
+      {/* BEFORE layer (full width) */}
+      <div className="comparison-layer">
+        {before ? (
+          <Image
+            src={`/api/asset?path=${encodeURIComponent(before.path)}`}
+            alt={`Before: ${before.filename}`}
+            fill
+            unoptimized
+            className="comparison-img"
+          />
+        ) : (
+          <div className="comparison-placeholder">No before image</div>
+        )}
+        <div className="comparison-label before-label">{before?.date ?? "Before"}</div>
+        {before && (
+          <div className="comparison-meta">
+            {before.region.replace("-", " ")} &middot; {before.phase.replace("-", " ")}
+          </div>
+        )}
+      </div>
+
+      {/* AFTER layer (clipped) */}
+      <div
+        className="comparison-layer comparison-after-clip"
+        style={{ clipPath: `inset(0 0 0 ${sliderPos}%)` }}
+        onMouseDown={onMouseDown}
+        onTouchStart={onMouseDown}
+      >
+        {after ? (
+          <Image
+            src={`/api/asset?path=${encodeURIComponent(after.path)}`}
+            alt={`After: ${after.filename}`}
+            fill
+            unoptimized
+            className="comparison-img"
+          />
+        ) : (
+          <div className="comparison-placeholder">No after image</div>
+        )}
+        <div className="comparison-label after-label">{after?.date ?? "After"}</div>
+        {after && (
+          <div className="comparison-meta">
+            {after.region.replace("-", " ")} &middot; {after.phase.replace("-", " ")}
+          </div>
+        )}
+      </div>
+
+      {/* Slider handle */}
+      <div className="comparison-handle" style={{ left: `${sliderPos}%` }} onMouseDown={onMouseDown} onTouchStart={onMouseDown}>
+        <div className="comparison-handle-line" />
+        <div className="comparison-handle-knob">
+          <ArrowLeftRight size={16} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Helpers ──
 function assetUrl(image?: ImageRecord) {
   return image ? `/api/asset?path=${encodeURIComponent(image.path)}` : "";
 }
@@ -473,7 +574,6 @@ export default function TimelineDashboard({ regions, featureKeys }: Props) {
       .then((response) => response.json())
       .then(setModelResults)
       .catch(() => setModelResults(null));
-    // Initial load only; form changes run through explicit actions.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -710,47 +810,31 @@ export default function TimelineDashboard({ regions, featureKeys }: Props) {
 
           <ModelResultsPanel modelResults={modelResults} />
 
+          {/* ── Image Comparison with Interactive Slider ── */}
           <section className="surface">
             <div className="surface-head">
               <div>
                 <h2>Image comparison</h2>
-                <p className="muted">Nearest curated imagery for the selected start and end points.</p>
+                <p className="muted">
+                  Drag the slider left and right to compare the nearest satellite imagery for the selected start and end points.
+                  <strong> Region/phase labels</strong> are shown on each side.
+                </p>
               </div>
             </div>
-            <div className="image-grid">
-              <article className="image-shell">
-                <header>
-                  <span className="image-label">Before</span>
-                  <strong>{data?.beforeImage?.date ?? from}</strong>
-                </header>
-                {data?.beforeImage ? (
-                  <Image
-                    src={assetUrl(data.beforeImage)}
-                    alt={data.beforeImage.filename}
-                    width={900}
-                    height={560}
-                    unoptimized
-                  />
-                ) : null}
-                <footer>{data?.beforeImage?.filename ?? "No matching image"}</footer>
-              </article>
-              <article className="image-shell">
-                <header>
-                  <span className="image-label">After</span>
-                  <strong>{data?.afterImage?.date ?? to}</strong>
-                </header>
-                {data?.afterImage ? (
-                  <Image
-                    src={assetUrl(data.afterImage)}
-                    alt={data.afterImage.filename}
-                    width={900}
-                    height={560}
-                    unoptimized
-                  />
-                ) : null}
-                <footer>{data?.afterImage?.filename ?? "No matching image"}</footer>
-              </article>
-            </div>
+            <ComparisonSlider before={data?.beforeImage} after={data?.afterImage} />
+            {data?.beforeImage && data?.afterImage && (
+              <div className="comparison-info-row">
+                <span>
+                  <strong>Before:</strong> {data.beforeImage.date} &mdash; Phase: {data.beforeImage.phase.replace("-", " ")}
+                </span>
+                <span>
+                  <strong>After:</strong> {data.afterImage.date} &mdash; Phase: {data.afterImage.phase.replace("-", " ")}
+                </span>
+                <span>
+                  <strong>Filename:</strong> {data.beforeImage.filename} &harr; {data.afterImage.filename}
+                </span>
+              </div>
+            )}
           </section>
 
           <section className="surface">
