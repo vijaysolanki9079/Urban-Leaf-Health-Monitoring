@@ -108,7 +108,7 @@ By integrating cloud-masked data ingestion from **Google Earth Engine**, a **14-
   <img src="assets/year_wise_comparison/class_separability.png" alt="Class Separability" width="1200" height="1000" />
 </div>
 
-> *(Left)* Cumulative forest loss chart across the Hasdeo timeline. *(Right)* Class separability matrix validating spectral feature quality.
+> *(Top)* Cumulative forest loss chart across the Hasdeo timeline. *(Bottom)* Class separability matrix validating spectral feature quality.
 
 ---
 
