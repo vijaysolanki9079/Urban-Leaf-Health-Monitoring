@@ -1,5 +1,4 @@
-import { promises as fs } from "fs";
-import path from "path";
+import { fetchCsv, r2Url } from "@/lib/r2";
 import { getFeatures } from "@/lib/data";
 
 export type PhaseKey = "pre_event" | "first_event" | "second_event" | "post_event";
@@ -57,8 +56,7 @@ export type RecommendationData = {
   zones: RecommendationZone[];
 };
 
-const PROJECT_ROOT = process.cwd();
-const EXPORT_LOG = path.join(PROJECT_ROOT, "data/03_hasdeo_1000_all_bands/metadata/export_log.csv");
+const EXPORT_LOG_PATH = "data/03_hasdeo_1000_all_bands/metadata/export_log.csv";
 
 const FULL_BOUNDS: Bounds = [82.58, 22.4, 83.2, 22.9];
 const CORE_BOUNDS: Bounds = [82.75, 22.5, 83.05, 22.8];
@@ -94,46 +92,6 @@ const METHODOLOGY = [
     description: "Monthly export coverage is used only as a confidence signal for the recommendation, not as ecological risk."
   }
 ] as const;
-
-function parseCsv(text: string): Record<string, string>[] {
-  const rows: string[][] = [];
-  let field = "";
-  let row: string[] = [];
-  let quoted = false;
-
-  for (let index = 0; index < text.length; index += 1) {
-    const char = text[index];
-    const next = text[index + 1];
-    if (char === '"' && quoted && next === '"') {
-      field += '"';
-      index += 1;
-    } else if (char === '"') {
-      quoted = !quoted;
-    } else if (char === "," && !quoted) {
-      row.push(field);
-      field = "";
-    } else if ((char === "\n" || char === "\r") && !quoted) {
-      if (char === "\r" && next === "\n") index += 1;
-      row.push(field);
-      field = "";
-      if (row.some((value) => value.trim() !== "")) rows.push(row);
-      row = [];
-    } else {
-      field += char;
-    }
-  }
-
-  if (field || row.length) {
-    row.push(field);
-    rows.push(row);
-  }
-
-  const [headers, ...body] = rows;
-  if (!headers) return [];
-  return body.map((values) =>
-    Object.fromEntries(headers.map((header, index) => [header.trim(), values[index]?.trim() ?? ""]))
-  );
-}
 
 function clamp01(value: number) {
   return Math.min(1, Math.max(0, value));
@@ -179,8 +137,9 @@ function zoneRegionName(zoneId: string) {
     .replace(/(^|_)([a-z])/g, (_, prefix: string, letter: string) => `${prefix}${letter.toUpperCase()}`);
 }
 
-async function getEvidenceScores() {
-  const rows = parseCsv(await fs.readFile(EXPORT_LOG, "utf8"));
+async function getEvidenceScores(): Promise<Map<string, number>> {
+  // Read export_log.csv from R2 instead of local filesystem
+  const rows = await fetchCsv(EXPORT_LOG_PATH);
   const byRegion = new Map<string, number[]>();
 
   for (const row of rows) {

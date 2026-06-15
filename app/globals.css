@@ -18,18 +18,17 @@
   --shadow-soft: 0 12px 28px rgba(18, 32, 27, 0.07);
 }
 
-/* Premium Dark Theme overrides applied via toggle button container class */
-.dark-theme {
-  --bg: #0b130f;
-  --panel: #14221b;
-  --panel-subtle: #1b2e25;
-  --ink: #f0f7f3;
-  --muted: #a3b8ad;
-  --line: #263d32;
-  --shadow: 0 20px 54px rgba(0, 0, 0, 0.65);
-  --shadow-soft: 0 12px 28px rgba(0, 0, 0, 0.45);
+/* Dark Theme overrides specifically for sandbox-page */
+.sandbox-page {
+  --bg: #090e0c;
+  --panel: #111a16;
+  --panel-subtle: #17241e;
+  --ink: #ecf3ef;
+  --muted: #8fa39b;
+  --line: #22352c;
+  --shadow: 0 20px 54px rgba(0, 0, 0, 0.5);
+  --shadow-soft: 0 12px 28px rgba(0, 0, 0, 0.4);
 }
-
 
 
 * {
@@ -2910,11 +2909,8 @@ th {
   padding: 6px 12px;
   min-height: auto;
   gap: 6px;
-  color: var(--ink);
-  border: 1px solid var(--line);
-  background: var(--panel);
-  cursor: pointer;
-  border-radius: 4px;
+  color: #496056;
+  border-color: var(--line);
 }
 
 .btn-toggle-paths.active {
@@ -2922,13 +2918,6 @@ th {
   color: var(--forest);
   border-color: rgba(31, 122, 76, 0.35);
   box-shadow: 0 0 0 2px rgba(31, 122, 76, 0.1);
-}
-
-.btn-toggle-theme {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
 }
 
 .wildlife-path-group {

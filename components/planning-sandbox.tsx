@@ -18,8 +18,6 @@ import {
   SlidersHorizontal,
   Sparkles,
   Thermometer,
-  Sun,
-  Moon,
   Trash2,
   Trees,
   Waves,
@@ -272,7 +270,6 @@ export default function PlanningSandbox() {
   const [isMouseDown, setIsMouseDown] = useState(false);
   const [showWildlifePaths, setShowWildlifePaths] = useState(true);
   const [activeScenario, setActiveScenario] = useState<ScenarioKey>("wilderness");
-  const [isDarkMode, setIsDarkMode] = useState(false);
 
   // Policy Toggles
   const [policyWildlife, setPolicyWildlife] = useState(false);
@@ -523,7 +520,7 @@ export default function PlanningSandbox() {
   }
 
   return (
-    <main className={`page sandbox-page ${isDarkMode ? "dark-theme" : ""}`} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}>
+    <main className="page sandbox-page" onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}>
 
       {/* ── Hero ── */}
       <section className="sandbox-hero">
@@ -591,14 +588,6 @@ export default function PlanningSandbox() {
                   onClick={() => setShowWildlifePaths(!showWildlifePaths)}
                 >
                   <Compass size={14} /> {showWildlifePaths ? "Hide Pathways" : "Show Pathways"}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-toggle-theme btn-reset"
-                  onClick={() => setIsDarkMode(!isDarkMode)}
-                  aria-label="Toggle dark mode theme"
-                >
-                  {isDarkMode ? <Sun size={14} /> : <Moon size={14} />} {isDarkMode ? "Light Mode" : "Dark Mode"}
                 </button>
                 <button type="button" className="btn btn-reset" onClick={resetAll} aria-label="Reset canvas">
                   <RefreshCcw size={14} /> Reset

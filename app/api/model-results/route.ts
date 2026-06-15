@@ -1,66 +1,34 @@
-import { promises as fs } from "fs";
-import path from "path";
 import { NextResponse } from "next/server";
-
-const ROOT = process.cwd();
-const SEARCH_ROOTS = [
-  path.join(ROOT, "results"),
-  path.join(ROOT, "h100_config/results"),
-  path.join(ROOT, "models"),
-  path.join(ROOT, "h100_config/models")
-];
+import { getManifest, fetchJsonFromR2, r2Url } from "@/lib/r2";
 
 export const dynamic = "force-dynamic";
 
-async function exists(filePath: string) {
-  try {
-    await fs.access(filePath);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function walk(dir: string): Promise<string[]> {
-  const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
-  const nested = await Promise.all(
-    entries.map(async (entry) => {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) return walk(full);
-      return [full];
-    })
-  );
-  return nested.flat();
-}
-
-function rel(filePath: string) {
-  return path.relative(ROOT, filePath);
-}
-
 export async function GET() {
-  const roots = [];
-  for (const root of SEARCH_ROOTS) {
-    if (await exists(root)) roots.push(root);
-  }
+  const manifest = await getManifest();
+  const modelFiles = manifest.models;
 
-  const files = (await Promise.all(roots.map(walk))).flat();
-  const modelPath = files.find((file) => /best_model\.pth$|\.pt$|\.ckpt$|\.keras$|\.h5$/i.test(file));
-  const historyPath = files.find((file) => /training_history\.json$/i.test(file));
-  const summaryFiles = files.filter((file) => /summary\.json$|inference_run_summary\.json$/i.test(file));
-  const masks = files
-    .filter((file) => /_mask\.png$/i.test(file))
-    .map((file) => ({ name: path.basename(file), path: rel(file) }));
-  const overlays = files
-    .filter((file) => /_overlay\.png$/i.test(file))
-    .map((file) => ({ name: path.basename(file), path: rel(file) }));
+  // Check if we have model directories listed in the manifest
+  const hasModel = false; // Model checkpoints (.pth/.pt/.ckpt) aren't tracked in manifest
+  const masks = (modelFiles?.masks ?? []).map((relativePath) => ({
+    name: relativePath.split("/").pop() ?? relativePath,
+    path: relativePath,
+    url: r2Url(relativePath),
+  }));
+  const overlays = (modelFiles?.overlays ?? []).map((relativePath) => ({
+    name: relativePath.split("/").pop() ?? relativePath,
+    path: relativePath,
+    url: r2Url(relativePath),
+  }));
 
+  // Try to fetch summary JSONs and training history
   const summaries = [];
-  for (const file of summaryFiles) {
-    try {
-      const parsed = JSON.parse(await fs.readFile(file, "utf8"));
+  for (const relativePath of modelFiles?.summaries ?? []) {
+    const data = await fetchJsonFromR2(relativePath);
+    if (data) {
+      const parsed = data as Record<string, unknown>;
       const values = Object.values(parsed);
       const firstValue = values[0] as unknown;
-      const data =
+      const summaryData =
         firstValue &&
         typeof firstValue === "object" &&
         "ratio" in firstValue &&
@@ -70,28 +38,31 @@ export async function GET() {
             ? firstValue
             : parsed;
       summaries.push({
-        name: path.basename(file),
-        path: rel(file),
-        data
+        name: relativePath.split("/").pop() ?? relativePath,
+        path: relativePath,
+        data: summaryData,
       });
-    } catch {
-      // Ignore malformed artifacts; the UI should reflect usable results only.
     }
   }
 
+  // Training history — attempt to fetch from known R2 paths
   let trainingHistory = null;
-  if (historyPath) {
-    try {
-      trainingHistory = JSON.parse(await fs.readFile(historyPath, "utf8"));
-    } catch {
-      trainingHistory = null;
+  const historyPaths = [
+    "results/training_history.json",
+    "h100_config/results/training_history.json",
+  ];
+  for (const historyPath of historyPaths) {
+    const data = await fetchJsonFromR2(historyPath);
+    if (data) {
+      trainingHistory = data;
+      break;
     }
   }
 
   return NextResponse.json({
-    hasModel: Boolean(modelPath),
+    hasModel,
     hasInference: summaries.length > 0 || masks.length > 0 || overlays.length > 0,
-    modelPath: modelPath ? rel(modelPath) : null,
+    modelPath: null,
     trainingHistory,
     summaries,
     masks,
@@ -100,13 +71,14 @@ export async function GET() {
       "trained checkpoint: results/best_model.pth or h100_config/results/best_model.pth",
       "inference masks: *_mask.png",
       "visual overlays: *_overlay.png",
-      "class summaries: *summary.json"
+      "class summaries: *summary.json",
     ],
     runbook: {
       script: "h100_config/06_predict_visualize.py",
-      purpose: "Batch inference over curated satellite rasters, then publish masks, overlays, and class ratios to the dashboard.",
+      purpose:
+        "Batch inference over curated satellite rasters, then publish masks, overlays, and class ratios to the dashboard.",
       example:
-        "python h100_config/06_predict_visualize.py --checkpoint results/best_model.pth --input data/<scene>.npy --output results/inference"
-    }
+        "python h100_config/06_predict_visualize.py --checkpoint results/best_model.pth --input data/<scene>.npy --output results/inference",
+    },
   });
 }
