@@ -30,6 +30,7 @@ html,
 body {
   margin: 0;
   min-height: 100%;
+  overflow-x: hidden;
   background:
     linear-gradient(rgba(255, 255, 255, 0.42) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.42) 1px, transparent 1px),
@@ -150,13 +151,14 @@ a {
   width: min(1480px, calc(100vw - 32px));
   margin: 0 auto;
   padding: 26px 0 48px;
+  overflow-x: hidden;
 }
 
 .workspace-head {
   position: relative;
   overflow: hidden;
   display: grid;
-  grid-template-columns: minmax(360px, 0.95fr) minmax(420px, 1.05fr);
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
   grid-template-areas:
     "copy visual"
     "metrics visual";
