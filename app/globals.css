@@ -22,6 +22,46 @@
   box-sizing: border-box;
 }
 
+/* ── Custom Scrollbar ── */
+html::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+html::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+html::-webkit-scrollbar-thumb {
+  background: rgba(31, 122, 76, 0.25);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  transition: background 200ms ease;
+}
+
+html::-webkit-scrollbar-thumb:hover {
+  background: rgba(31, 122, 76, 0.45);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}
+
+html::-webkit-scrollbar-thumb:active {
+  background: rgba(31, 122, 76, 0.55);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}
+
+/* Firefox support */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(31, 122, 76, 0.25) transparent;
+}
+
+html:hover {
+  scrollbar-color: rgba(31, 122, 76, 0.45) transparent;
+}
+
 html {
   zoom: 0.9;
 }
@@ -260,6 +300,8 @@ a {
 .hero-visual {
   grid-area: visual;
   min-height: 382px;
+  position: relative;
+  overflow: hidden;
 }
 
 .hero-image {
@@ -293,16 +335,16 @@ a {
 }
 
 .hero-image-small.two {
-  right: 36px;
+  right: 8px;
   bottom: 0;
   background-image: url("/api/asset?path=assets/year_wise_comparison/forest_loss.png");
 }
 
 .hero-glass {
   position: absolute;
-  right: 0;
+  right: 8px;
   top: 28px;
-  width: min(260px, 52%);
+  width: min(240px, 48%);
   padding: 15px;
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 8px;
@@ -2369,6 +2411,69 @@ th {
   box-shadow: 0 0 0 2px rgba(39, 115, 155, 0.12);
 }
 
+/* ── Sandbox Preset Tooltip Popup ── */
+.sandbox-preset-tile {
+  position: relative;
+}
+
+.sandbox-preset-tip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(7, 19, 15, 0.92);
+  color: #e8f0ea;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.35;
+  padding: 6px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 180ms ease, transform 180ms ease;
+  z-index: 10;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+.sandbox-preset-tip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: rgba(7, 19, 15, 0.92);
+}
+
+.sandbox-preset-tile:hover .sandbox-preset-tip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(-2px);
+}
+
+/* Hint badge that shows on the header when no preset is active */
+.sandbox-presets-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted);
+  background: rgba(100, 114, 110, 0.08);
+  padding: 3px 8px;
+  border-radius: 99px;
+  text-transform: none;
+  letter-spacing: normal;
+  margin-left: auto;
+  animation: hintPulse 2.5s ease-in-out infinite;
+}
+
+@keyframes hintPulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
 .sandbox-preset-icon {
   display: flex;
   align-items: center;
@@ -3008,6 +3113,161 @@ th {
   letter-spacing: 0.05em;
 }
 
+
+/* ── Sample image cards in segmentation lab ── */
+.seg-samples-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 820;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+  margin-bottom: 2px;
+}
+
+.seg-sample-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.10);
+  color: white;
+  text-align: left;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, transform 140ms ease;
+}
+
+.seg-sample-card:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(240, 195, 90, 0.36);
+  transform: translateY(-1px);
+}
+
+.seg-sample-thumb {
+  width: 42px;
+  height: 42px;
+  border-radius: 4px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.seg-sample-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.seg-sample-tag {
+  display: inline-block;
+  width: fit-content;
+  font-size: 9px;
+  font-weight: 820;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 99px;
+  background: rgba(240, 195, 90, 0.14);
+  color: var(--gold);
+}
+
+.seg-sample-info strong {
+  font-size: 12px;
+  font-weight: 720;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.seg-sample-info small {
+  display: none;
+}
+
+/* ── Processing overlay ── */
+.seg-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  display: grid;
+  place-items: center;
+  background: rgba(7, 19, 15, 0.48);
+  backdrop-filter: blur(6px);
+  animation: segOverlayFade 200ms ease;
+}
+
+@keyframes segOverlayFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.seg-overlay-card {
+  width: clamp(280px, 90vw, 400px);
+  padding: 28px 24px;
+  border-radius: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: 0 24px 64px rgba(7, 19, 15, 0.24);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+}
+
+.seg-overlay-spinner {
+  color: var(--forest);
+  animation: segOverlaySpin 0.8s linear infinite;
+}
+
+@keyframes segOverlaySpin {
+  to { transform: rotate(360deg); }
+}
+
+.seg-overlay-card strong {
+  font-size: 15px;
+}
+
+.seg-overlay-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.seg-overlay-bar {
+  width: 100%;
+  height: 6px;
+  border-radius: 99px;
+  background: var(--panel-subtle);
+  overflow: hidden;
+}
+
+.seg-overlay-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--forest), #54a36f);
+  transition: width 180ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.seg-overlay-card small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+/* ── Welcome toast ── */
+.seg-toast--welcome {
+  background: rgba(22, 58, 40, 0.96);
+  border-color: rgba(84, 163, 111, 0.28);
+  color: #e8f0ea;
+}
+.seg-toast--welcome .seg-toast-icon { color: #54a36f; }
+.seg-toast--welcome::after { background: #54a36f; }
 
 /* ── Primary Recommendation Image Card ── */
 .recommendation-headline-card {

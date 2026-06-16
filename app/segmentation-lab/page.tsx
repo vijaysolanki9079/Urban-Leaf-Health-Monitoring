@@ -1,7 +1,7 @@
 "use client";
 
 import { ChangeEvent, useCallback, useEffect, useRef, useState, useTransition } from "react";
-import { ArrowUpFromLine, CheckCircle2, ImagePlus, Layers3, SplitSquareVertical, Trees, TriangleAlert, Waves, X } from "lucide-react";
+import { ArrowUpFromLine, CheckCircle2, ImagePlus, Layers3, Loader2, SplitSquareVertical, Sparkles, Trees, TriangleAlert, Upload, Waves, X } from "lucide-react";
 
 /* ─────────────────── Types ─────────────────── */
 
@@ -33,7 +33,7 @@ type SegmentationResult = {
   waterShadowShare: number;
 };
 
-type ToastKind = "success" | "error" | "info";
+type ToastKind = "success" | "error" | "info" | "welcome";
 type Toast = { id: number; kind: ToastKind; title: string; message: string };
 
 /* ─────────────────── Constants ─────────────────── */
@@ -49,14 +49,20 @@ const CLASS_META: Array<{ id: ClassKey; name: string; color: [number, number, nu
 const SAMPLE_IMAGES = [
   {
     label: "Hasdeo Disturbance Window",
+    desc: "Open-pit mining disturbance area",
+    tag: "Disturbance",
     url: "/api/asset?path=data/02_comparison_based_on_events/event_1/tiff_to_jpeg/ANN_Hasdeo_Full_2022.jpg"
   },
   {
     label: "Hasdeo Baseline Scene",
+    desc: "Pre-mining forest baseline",
+    tag: "Baseline",
     url: "/api/asset?path=data/02_comparison_based_on_events/event_1/tiff_to_jpeg/MON_Hasdeo_North_2020_01_slowdown.jpg"
   },
   {
-    label: "Kangaroo Island Recovery Window",
+    label: "Kangaroo Island Recovery",
+    desc: "Post-fire recovery vegetation",
+    tag: "Recovery",
     url: "/api/asset?path=data/01_area_of_interest_selection_using_sampling/batch_3/kangaroo_island_black_summer/rgb_images/KI_2021-01-09_POSTFIRE_RECOVERY_RGB.png"
   }
 ];
@@ -187,9 +193,10 @@ async function runComparison(sourceUrl: string, sourceLabel: string): Promise<Se
 /* ─────────────────── Toast component ─────────────────── */
 
 function ToastIcon({ kind }: { kind: ToastKind }) {
-  if (kind === "success") return <CheckCircle2 size={18} aria-hidden />;
-  if (kind === "error") return <TriangleAlert size={18} aria-hidden />;
-  return <ImagePlus size={18} aria-hidden />;
+  if (kind === "success") return <CheckCircle2 size={20} aria-hidden />;
+  if (kind === "error") return <TriangleAlert size={20} aria-hidden />;
+  if (kind === "welcome") return <Sparkles size={20} aria-hidden />;
+  return <Upload size={20} aria-hidden />;
 }
 
 function ToastItem({
@@ -207,9 +214,10 @@ function ToastItem({
   }, [onDismiss, toast.id]);
 
   useEffect(() => {
-    const timer = setTimeout(dismiss, 4500);
+    const delay = toast.kind === "welcome" ? 7000 : 4500;
+    const timer = setTimeout(dismiss, delay);
     return () => clearTimeout(timer);
-  }, [dismiss]);
+  }, [dismiss, toast.kind]);
 
   return (
     <div
@@ -253,6 +261,48 @@ function ToastStack({
   );
 }
 
+/* ─────────────────── Processing overlay ─────────────────── */
+
+function rand(min: number, max: number) {
+  return Math.round(min + Math.random() * (max - min));
+}
+
+function ProcessingOverlay({ visible }: { visible: boolean }) {
+  const [progress, setProgress] = useState(0);
+  const durationRef = useRef(rand(1500, 2200));
+
+  useEffect(() => {
+    if (!visible) { setProgress(0); return; }
+    setProgress(0);
+    durationRef.current = rand(1500, 2200);
+    const d = durationRef.current;
+    const steps = [
+      { at: Math.round(d * 0.12), value: rand(15, 35) },
+      { at: Math.round(d * 0.38), value: rand(45, 70) },
+      { at: Math.round(d * 0.72), value: rand(78, 92) },
+      { at: Math.round(d * 0.92), value: 100 },
+    ];
+    const timers = steps.map(({ at, value }) => setTimeout(() => setProgress(value), at));
+    return () => timers.forEach(clearTimeout);
+  }, [visible]);
+
+  if (!visible) return null;
+
+  return (
+    <div className="seg-overlay" role="status" aria-busy="true" aria-label="Processing segmentation">
+      <div className="seg-overlay-card">
+        <Loader2 size={32} className="seg-overlay-spinner" />
+        <strong>Analysing your satellite image&hellip;</strong>
+        <p>Running pixel classification, mask smoothing, and indicator extraction.</p>
+        <div className="seg-overlay-bar">
+          <div className="seg-overlay-fill" style={{ width: `${progress}%` }} />
+        </div>
+        <small>{progress}% complete</small>
+      </div>
+    </div>
+  );
+}
+
 /* ─────────────────── Summary bars ─────────────────── */
 
 function SummaryBars({ title, summary }: { title: string; summary: ClassSummary[] }) {
@@ -284,6 +334,9 @@ export default function SegmentationLabPage() {
   const [result, setResult] = useState<SegmentationResult | null>(null);
   const [isPending, startTransition] = useTransition();
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [showProcessing, setShowProcessing] = useState(false);
+  const [hasLoadedSample, setHasLoadedSample] = useState(false);
+  const welcomeShown = useRef(false);
 
   /* Toast helpers */
   const addToast = useCallback((kind: ToastKind, title: string, message: string) => {
@@ -296,12 +349,12 @@ export default function SegmentationLabPage() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  /* Scroll to results once they arrive */
+  /* Scroll to results once they arrive after upload */
   useEffect(() => {
-    if (result && resultsRef.current) {
+    if (result && resultsRef.current && hasLoadedSample) {
       resultsRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
     }
-  }, [result]);
+  }, [result, hasLoadedSample]);
 
   /* Revoke object URL on unmount */
   useEffect(() => {
@@ -310,27 +363,22 @@ export default function SegmentationLabPage() {
     };
   }, []);
 
-  /* Initial sample load (silent – no toast) */
+  /* Welcome toast on first visit */
   useEffect(() => {
-    startTransition(() => {
-      void runComparison(SAMPLE_IMAGES[0].url, SAMPLE_IMAGES[0].label)
-        .then(setResult)
-        .catch(() => {/* silent initial load failure */});
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (welcomeShown.current) return;
+    welcomeShown.current = true;
+    const timer = setTimeout(() => {
+      addToast("welcome", "Welcome to the Segmentation Lab", "Upload a satellite image or try a sample to see the AI-powered land classification in action.");
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [addToast]);
 
   function handleSample(url: string, label: string) {
-    addToast("info", "Loading scene", `Preparing "${label}" for segmentation…`);
+    setHasLoadedSample(true);
     startTransition(() => {
       void runComparison(url, label)
-        .then((res) => {
-          setResult(res);
-          addToast("success", "Segmentation complete", `"${label}" analysed — ${res.canopyCover.toFixed(1)}% canopy detected.`);
-        })
-        .catch((err: Error) => {
-          addToast("error", "Segmentation failed", err.message);
-        });
+        .then(setResult)
+        .catch(() => {/* silent fail for samples */});
     });
   }
 
@@ -340,7 +388,7 @@ export default function SegmentationLabPage() {
 
     /* Validate file type */
     if (!ACCEPTED_TYPES.includes(file.type)) {
-      addToast("error", "Unsupported format", `"${file.name}" is not a PNG, JPEG, or WebP image.`);
+      addToast("error", "Unsupported format", `${file.name} is not a PNG, JPEG, or WebP image.`);
       event.target.value = "";
       return;
     }
@@ -356,19 +404,26 @@ export default function SegmentationLabPage() {
     const objectUrl = URL.createObjectURL(file);
     uploadUrlRef.current = objectUrl;
 
-    addToast("info", "Image uploaded", `"${file.name}" received — starting segmentation on background thread…`);
+    addToast("info", "Image uploaded", `${file.name} received &mdash; starting segmentation on background thread&hellip;`);
+    setShowProcessing(true);
+    setHasLoadedSample(true);
+    const delay = rand(1500, 2200);
 
     startTransition(() => {
       void runComparison(objectUrl, file.name)
         .then((res) => {
-          setResult(res);
-          addToast(
-            "success",
-            "Analysis ready",
-            `"${file.name}" — ${res.canopyCover.toFixed(1)}% canopy · ${res.builtUpShare.toFixed(1)}% built-up · ${res.agreement.toFixed(1)}% engine agreement.`
-          );
+          setTimeout(() => {
+            setResult(res);
+            setShowProcessing(false);
+            addToast(
+              "success",
+              "Analysis ready",
+              `${file.name} &mdash; ${res.canopyCover.toFixed(1)}% canopy · ${res.builtUpShare.toFixed(1)}% built-up · ${res.agreement.toFixed(1)}% engine agreement.`
+            );
+          }, delay);
         })
         .catch((err: Error) => {
+          setShowProcessing(false);
           addToast("error", "Upload processing failed", err.message);
         });
     });
@@ -382,10 +437,13 @@ export default function SegmentationLabPage() {
       {/* ── Toast portal ── */}
       <ToastStack toasts={toasts} onDismiss={dismissToast} />
 
+      {/* ── Processing overlay ── */}
+      <ProcessingOverlay visible={showProcessing} />
+
       {/* ── Hero ── */}
       <section className="seg-hero">
         <div>
-          <span className="badge">Model comparison lab</span>
+          <span className="badge"><Sparkles size={12} aria-hidden /> AI-Powered</span>
           <h1>Compare a reference segmenter against the Urban Leaf segmentation workflow.</h1>
           <p>
             Upload one image, run both engines on the same frame, and inspect masks, overlays, class ratios, and
@@ -405,14 +463,26 @@ export default function SegmentationLabPage() {
             />
           </label>
           <div className="seg-samples">
+            <span className="seg-samples-label">Pre-processed results</span>
             {SAMPLE_IMAGES.map((item) => (
               <button
                 key={item.label}
                 type="button"
+                className="seg-sample-card"
                 id={`seg-sample-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
                 onClick={() => handleSample(item.url, item.label)}
               >
-                {item.label}
+                <img
+                  className="seg-sample-thumb"
+                  src={item.url}
+                  alt={item.label}
+                  loading="lazy"
+                />
+                <div className="seg-sample-info">
+                  <span className="seg-sample-tag">{item.tag}</span>
+                  <strong>{item.label}</strong>
+                  <small>{item.desc}</small>
+                </div>
               </button>
             ))}
           </div>
@@ -441,7 +511,7 @@ export default function SegmentationLabPage() {
       </section>
 
       {/* ── Worker banner ── */}
-      {isPending && (
+      {isPending && !showProcessing && (
         <section className="seg-worker-banner" aria-live="polite" aria-busy="true">
           <span className="seg-worker-spinner" aria-hidden="true" />
           <div>
@@ -462,16 +532,16 @@ export default function SegmentationLabPage() {
           <div className="surface-head">
             <div>
               <h2>Input frame</h2>
-              <p className="muted">{result?.sourceLabel ?? "Preparing sample image…"}</p>
+              <p className="muted">{result?.sourceLabel ?? "Upload an image to see results here&hellip;"}</p>
             </div>
             <span className="badge">
-              {isPending ? "Running" : result ? `${result.width} × ${result.height}` : "Idle"}
+              {isPending || showProcessing ? "Running" : result ? `${result.width} × ${result.height}` : "Idle"}
             </span>
           </div>
 
           {result ? (
             <img className="seg-image" src={result.sourceUrl} alt={result.sourceLabel} />
-          ) : isPending ? (
+          ) : isPending || showProcessing ? (
             <div className="seg-skeleton">
               <div className="seg-skeleton-img" />
               <div className="seg-skeleton-lines"><span /><span /><span /></div>
@@ -506,8 +576,8 @@ export default function SegmentationLabPage() {
           {result ? (
             <img className="seg-image" src={result.referenceOverlayUrl} alt="Reference segmentation overlay" />
           ) : (
-            <div className={isPending ? "seg-skeleton" : "seg-placeholder"}>
-              {isPending && (
+            <div className={isPending || showProcessing ? "seg-skeleton" : "seg-placeholder"}>
+              {(isPending || showProcessing) && (
                 <>
                   <div className="seg-skeleton-img" />
                   <div className="seg-skeleton-lines"><span /><span /><span /></div>
@@ -530,8 +600,8 @@ export default function SegmentationLabPage() {
           {result ? (
             <img className="seg-image" src={result.projectOverlayUrl} alt="Project segmentation overlay" />
           ) : (
-            <div className={isPending ? "seg-skeleton" : "seg-placeholder"}>
-              {isPending && (
+            <div className={isPending || showProcessing ? "seg-skeleton" : "seg-placeholder"}>
+              {(isPending || showProcessing) && (
                 <>
                   <div className="seg-skeleton-img" />
                   <div className="seg-skeleton-lines"><span /><span /><span /></div>
