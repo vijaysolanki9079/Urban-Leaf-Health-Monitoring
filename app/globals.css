@@ -563,9 +563,12 @@ a {
 .content {
   display: grid;
   gap: 20px;
-  width: 100%;
   min-width: 0;
-  overflow: hidden;
+}
+
+.content > .surface,
+.content > section {
+  min-width: 0;
 }
 
 .metrics {
@@ -633,6 +636,9 @@ a {
 
 .surface {
   padding: 20px;
+  overflow: hidden;
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
   background:
     linear-gradient(180deg, #ffffff, #fbfcfc);
 }
