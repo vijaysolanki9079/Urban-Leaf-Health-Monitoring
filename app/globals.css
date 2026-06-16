@@ -315,11 +315,11 @@ a {
 }
 
 .hero-image-main {
-  inset: 4px 0 68px 70px;
+  inset: 4px 20px 68px 70px;
   background-image:
     linear-gradient(180deg, rgba(7, 19, 15, 0.04), rgba(7, 19, 15, 0.30)),
     url("/api/asset?path=data/02_comparison_based_on_events/event_1/tiff_to_jpeg/ANN_Hasdeo_Full_2022.jpg");
-  background-size: 118%;
+  background-size: cover;
   background-position: center;
 }
 
