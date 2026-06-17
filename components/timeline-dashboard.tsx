@@ -533,12 +533,15 @@ function ModelResultsPanel({ modelResults }: { modelResults: ModelResults | null
           <GitBranch size={28} aria-hidden />
           <div>
             <strong>No model inference results found in this repo yet.</strong>
-            <p>
-              The current graphs use curated GEE/CSV feature data. To show the trained model working behind the
-              website, run <code> {modelResults?.runbook?.script ?? "h100_config/06_predict_visualize.py"} </code>
-              on selected scenes. The API will pick up masks, overlays, and JSON summaries automatically.
-            </p>
-            {modelResults?.runbook?.example ? <code className="run-command">{modelResults.runbook.example}</code> : null}
+<p>
+  Currently displaying curated GEE/CSV feature data. To visualize your trained model in real time, run <code>{modelResults?.runbook?.script ?? "h100_config/06_predict_visualize.py"}</code>   on your selected scenes. The API will automatically sync your masks, overlays, and JSON summaries.
+</p>
+            {modelResults?.runbook?.example ? (
+              /* FORCE TEXT BREAKING HERE */
+              <code className="run-command !block !w-full !whitespace-pre-wrap !break-all !normal-case tracking-normal overflow-hidden">
+                {modelResults.runbook.example}
+              </code>
+            ) : null}
           </div>
         </div>
       )}

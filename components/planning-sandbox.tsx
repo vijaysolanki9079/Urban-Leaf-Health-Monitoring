@@ -539,9 +539,9 @@ export default function PlanningSandbox() {
             <Zap size={14} aria-hidden />
             <span>Simulation Presets</span>
             {activeScenario ? (
-              <span className="sandbox-active-badge">
+              <span className={`sandbox-active-badge variant-${activeScenario}`}>
                 {SCENARIO_META[activeScenario].icon}
-                {SCENARIO_META[activeScenario].label} active
+                <span>{SCENARIO_META[activeScenario].label} active</span>
               </span>
             ) : (
               <span className="sandbox-presets-hint">
@@ -556,7 +556,7 @@ export default function PlanningSandbox() {
                 key={key}
                 type="button"
                 id={`sandbox-preset-${key}`}
-                className={`sandbox-preset-tile ${meta.btnClass} ${activeScenario === key ? "active" : ""}`}
+                className={`sandbox-preset-tile preset-${key} ${activeScenario === key ? "active" : ""}`}
                 onClick={() => loadScenario(key)}
               >
                 <span className="sandbox-preset-tip">Click to load {meta.label}</span>
@@ -567,7 +567,7 @@ export default function PlanningSandbox() {
                 </div>
                 {activeScenario === key && (
                   <span className="sandbox-preset-check" aria-label="Active">
-                    <CheckCircle2 size={14} />
+                    <CheckCircle2 size={13} />
                   </span>
                 )}
               </button>

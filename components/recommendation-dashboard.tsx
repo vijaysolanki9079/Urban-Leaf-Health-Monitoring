@@ -39,6 +39,7 @@ export default function RecommendationDashboard({ data }: { data: Recommendation
   const [selectedId, setSelectedId] = useState(data.recommendation.primaryZoneId);
   const selected = data.zones.find((zone) => zone.id === selectedId) ?? data.zones[0];
   const fullBounds = data.studyArea.bounds;
+  
   const plottedZones = useMemo(
     () => data.zones.map((zone) => ({ zone, rect: project(zone.bounds, fullBounds) })),
     [data.zones, fullBounds]
@@ -47,39 +48,50 @@ export default function RecommendationDashboard({ data }: { data: Recommendation
   return (
     <main className="page recommendation-page">
       <section className="recommendation-hero">
-        <div>
-          <span className="badge">Decision support</span>
-          <h1>Lower-impact development guidance for the Hasdeo forest boundary.</h1>
+        <div className="hero-content">
+          <span className="badge glass-badge">Decision Support</span>
+          <h1>Optimized Spatial Planning & Ecological Sensitivity Matrix</h1>
           <p>
-            This planning layer ranks Hasdeo zones by ecological sensitivity, periphery advantage, and evidence confidence
-            so the project can answer where development pressure should be kept lowest.
+            This operational layer ranks peripheral Hasdeo zones by environmental fragility, 
+            core proximity, and evidence confidence to dictate where development pressure carries the lowest ecological tax.
           </p>
         </div>
-        <div className="recommendation-headline-card">
+        
+        {/* Restored Original Right-Side Block */}
+        <div className="recommendation-headline">
           <div className="recommendation-headline-img" />
           <div className="recommendation-headline-body">
-            <span className="rec-eyebrow">Primary recommendation</span>
-            <strong className="rec-headline">{data.recommendation.headline}</strong>
-            <p className="rec-summary">{data.recommendation.summary}</p>
+            <span>Strategic Directive</span>
+            <strong>{data.recommendation.headline}</strong>
+            <p>{data.recommendation.summary}</p>
           </div>
         </div>
       </section>
 
       <section className="recommendation-kpis">
-        <article className="stat accent-down">
-          <span><Trees size={15} aria-hidden /> Disturbance signal</span>
-          <strong>{Math.abs(data.context.ndviDropPct).toFixed(1)}%</strong>
-          <small>NDVI drop in the March-April 2022 disturbance window.</small>
+        <article className="stat stat-card">
+          <div className="stat-icon-wrapper forest"><Trees size={16} aria-hidden /></div>
+          <div className="stat-content">
+            <span>Disturbance Signal</span>
+            <strong>{Math.abs(data.context.ndviDropPct).toFixed(1)}%</strong>
+            <small>Canopy collapse in the March-April 2022 window.</small>
+          </div>
         </article>
-        <article className="stat accent-amber">
-          <span><ShieldAlert size={15} aria-hidden /> Surface exposure</span>
-          <strong>+{data.context.bsiRisePct.toFixed(1)}%</strong>
-          <small>BSI rise against the pre-event baseline.</small>
+        <article className="stat stat-card">
+          <div className="stat-icon-wrapper amber"><ShieldAlert size={16} aria-hidden /></div>
+          <div className="stat-content">
+            <span>Surface Exposure</span>
+            <strong>+{data.context.bsiRisePct.toFixed(1)}%</strong>
+            <small>BSI surge against the pre-event baseline.</small>
+          </div>
         </article>
-        <article className="stat accent-blue">
-          <span><Compass size={15} aria-hidden /> Thermal pressure</span>
-          <strong>+{data.context.heatRisePct.toFixed(1)}%</strong>
-          <small>Heat rise in the same disturbance window.</small>
+        <article className="stat stat-card">
+          <div className="stat-icon-wrapper danger"><Compass size={16} aria-hidden /></div>
+          <div className="stat-content">
+            <span>Thermal Pressure</span>
+            <strong>+{data.context.heatRisePct.toFixed(1)}%</strong>
+            <small>Radiometric heat rise mapped to the disruption sector.</small>
+          </div>
         </article>
       </section>
 
@@ -87,17 +99,21 @@ export default function RecommendationDashboard({ data }: { data: Recommendation
         <section className="surface recommendation-map-surface">
           <div className="surface-head">
             <div>
-              <h2>Hasdeo zone map</h2>
-              <p className="muted">Click a zone to inspect its score and decision logic.</p>
+              <h2>Hasdeo Topology Map</h2>
+              <p className="muted">Select a perimeter zone to audit its scoring telemetry.</p>
             </div>
-            <span className="badge">{selected.label}</span>
+            <span className="badge outline-badge">{selected.label}</span>
           </div>
 
           <div className="zone-map">
             <svg viewBox="0 0 100 100" role="img" aria-label="Hasdeo recommendation map">
-              <rect x="0" y="0" width="100" height="100" rx="5" fill="#eef4ee" stroke="#cdd8cf" />
+              <rect x="0" y="0" width="100" height="100" rx="5" fill="#f4f7f4" stroke="#d3ded5" />
               {plottedZones.map(({ zone, rect }) => (
-                <g key={zone.id} onClick={() => setSelectedId(zone.id)} style={{ cursor: "pointer" }}>
+                <g 
+                  key={zone.id} 
+                  onClick={() => setSelectedId(zone.id)} 
+                  className={`map-zone-group ${selected.id === zone.id ? 'active' : ''}`}
+                >
                   <rect
                     x={rect.x}
                     y={rect.y}
@@ -107,6 +123,7 @@ export default function RecommendationDashboard({ data }: { data: Recommendation
                     fill={zoneFill(zone.category)}
                     stroke={selected.id === zone.id ? "#07130f" : zoneStroke(zone.category)}
                     strokeWidth={selected.id === zone.id ? 1.5 : 0.7}
+                    className="zone-rect"
                   />
                   <text x={rect.x + rect.width / 2} y={rect.y + rect.height / 2} textAnchor="middle" dominantBaseline="middle">
                     {zone.label.replace("Hasdeo ", "")}
@@ -117,9 +134,9 @@ export default function RecommendationDashboard({ data }: { data: Recommendation
           </div>
 
           <div className="zone-legend">
-            <span><i className="good" /> Preferred zone</span>
-            <span><i className="watch" /> Conditional</span>
-            <span><i className="risk" /> Avoid</span>
+            <span className="legend-item"><i className="good" /> Preferred Zone</span>
+            <span className="legend-item"><i className="watch" /> Conditional</span>
+            <span className="legend-item"><i className="risk" /> Avoid</span>
           </div>
         </section>
 
@@ -131,50 +148,50 @@ export default function RecommendationDashboard({ data }: { data: Recommendation
             </div>
           </div>
 
-          <div className={`recommendation-badge ${selected.category === "Avoid" ? "risk" : selected.category === "Conditional" ? "watch" : "good"}`}>
+          <div className={`status-badge ${selected.category.toLowerCase()}`}>
             {selected.category}
           </div>
-
+          
           <div className="recommendation-metric-grid">
-            <div>
+            <div className="metric-box">
               <span>Suitability</span>
               <strong>{selected.suitabilityScore.toFixed(0)}</strong>
             </div>
-            <div>
+            <div className="metric-box">
               <span>Risk</span>
               <strong>{selected.environmentalRisk.toFixed(0)}</strong>
             </div>
-            <div>
-              <span>Core overlap</span>
+            <div className="metric-box">
+              <span>Core Overlap</span>
               <strong>{selected.coreOverlapPct.toFixed(1)}%</strong>
             </div>
-            <div>
+            <div className="metric-box">
               <span>Periphery</span>
               <strong>{selected.peripheralAccessPct.toFixed(1)}%</strong>
             </div>
           </div>
 
           <div className="score-breakdown">
-            <h3>Score breakdown</h3>
+            <h3>Component Weighting</h3>
             <div className="score-row">
-              <span>Core sensitivity</span>
-              <div><i style={{ width: `${selected.coreOverlapPct}%` }} /></div>
+              <span>Core Sensitivity</span>
+              <div className="progress-track"><i style={{ width: `${selected.coreOverlapPct}%` }} /></div>
             </div>
             <div className="score-row">
               <span>Centrality</span>
-              <div><i style={{ width: `${selected.centralityPct}%` }} /></div>
+              <div className="progress-track"><i style={{ width: `${selected.centralityPct}%` }} /></div>
             </div>
             <div className="score-row">
-              <span>Periphery advantage</span>
-              <div><i style={{ width: `${selected.peripheralAccessPct}%` }} /></div>
+              <span>Periphery Advantage</span>
+              <div className="progress-track"><i style={{ width: `${selected.peripheralAccessPct}%` }} /></div>
             </div>
             <div className="score-row">
-              <span>Evidence confidence</span>
-              <div><i style={{ width: `${selected.evidenceScore}%` }} /></div>
+              <span>Evidence Confidence</span>
+              <div className="progress-track"><i style={{ width: `${selected.evidenceScore}%` }} /></div>
             </div>
           </div>
 
-          <ul className="evidence-list">
+          <ul className="evidence-list audit-list">
             {selected.facts.map((fact) => (
               <li key={fact}>{fact}</li>
             ))}
@@ -182,11 +199,11 @@ export default function RecommendationDashboard({ data }: { data: Recommendation
         </aside>
       </div>
 
-      <section className="surface">
+      <section className="surface rank-section">
         <div className="surface-head">
           <div>
-            <h2>Zone ranking</h2>
-            <p className="muted">Higher scores indicate lower expected ecological disruption under this planning heuristic.</p>
+            <h2>Sector Ranking Matrix</h2>
+            <p className="muted">Higher baseline scores correlate to reduced ecological disruption under the current planning heuristic.</p>
           </div>
         </div>
         <div className="recommendation-rank-grid">
@@ -199,13 +216,13 @@ export default function RecommendationDashboard({ data }: { data: Recommendation
                 className={`rank-card ${selected.id === zone.id ? "active" : ""}`}
                 onClick={() => setSelectedId(zone.id)}
               >
-                <div>
-                  <span>#{index + 1}</span>
-                  <Icon size={18} aria-hidden />
+                <div className="rank-header">
+                  <span className="rank-number">#{index + 1}</span>
+                  <div className="rank-icon"><Icon size={18} aria-hidden /></div>
                 </div>
                 <strong>{zone.label}</strong>
                 <p>{zone.category}</p>
-                <em>{zone.suitabilityScore.toFixed(0)}/100 suitability</em>
+                <em>{zone.suitabilityScore.toFixed(0)}/100 Suitability Score</em>
               </button>
             );
           })}
@@ -215,22 +232,25 @@ export default function RecommendationDashboard({ data }: { data: Recommendation
       <section className="surface">
         <div className="surface-head">
           <div>
-            <h2>Method and cautions</h2>
-            <p className="muted">This layer is designed to support planning discussions, not replace formal ecological clearance work.</p>
+            <h2>Methodology & Cautions</h2>
+            <p className="muted">This layer is engineered for preliminary spatial filtering, not as a replacement for formal ground-truth clearance.</p>
           </div>
-          <MapPinned size={20} aria-hidden />
+          <div className="icon-wrapper">
+            <MapPinned size={20} aria-hidden />
+          </div>
         </div>
         <div className="recommendation-method-grid">
           {data.methodology.map((item) => (
-            <article key={item.label}>
-              <span>{Math.round(item.weight * 100)}%</span>
+            <article key={item.label} className="method-card">
+              <span className="weight-badge">{Math.round(item.weight * 100)}% Weight</span>
               <strong>{item.label}</strong>
               <p>{item.description}</p>
             </article>
           ))}
         </div>
         <div className="recommendation-note">
-          <strong>Current evidence note:</strong> {data.context.disturbanceWindow} {data.context.recoverySignal}
+          <ShieldAlert size={16} />
+          <span><strong>Current Evidence Note:</strong> {data.context.disturbanceWindow} {data.context.recoverySignal}</span>
         </div>
       </section>
     </main>
