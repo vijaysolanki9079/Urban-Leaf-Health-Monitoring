@@ -3796,3 +3796,58 @@ th {
 .cell-industrial   { background-color: #a53e32; }
 .cell-green-highway { background-color: #5c7d8c; }
 
+/* ─── Desktop-only access blocker ─────────────────────────── */
+.desktop-only-blocker {
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  html,
+  body {
+    overflow: hidden;
+  }
+
+  body > :not(.desktop-only-blocker) {
+    display: none !important;
+  }
+
+  .desktop-only-blocker {
+    position: fixed;
+    inset: 0;
+    z-index: 2147483647;
+    display: grid;
+    place-items: center;
+    min-height: 100vh;
+    padding: 24px;
+    background:
+      linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+      #07130f;
+    background-size: 24px 24px;
+    color: #ffffff;
+  }
+
+  .desktop-only-blocker-card {
+    width: min(100%, 520px);
+    padding: 28px;
+    border: 1px solid rgba(240, 195, 90, 0.6);
+    border-radius: 8px;
+    background: rgba(7, 19, 15, 0.94);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+    text-align: center;
+  }
+
+  .desktop-only-blocker-card strong {
+    display: block;
+    color: var(--gold);
+    font-size: 24px;
+    line-height: 1.15;
+  }
+
+  .desktop-only-blocker-card p {
+    margin: 12px 0 0;
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 15px;
+    line-height: 1.55;
+  }
+}

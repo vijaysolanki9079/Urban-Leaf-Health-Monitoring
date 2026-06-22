@@ -17,6 +17,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className={manrope.variable}>
+        <div className="desktop-only-blocker" role="alert" aria-live="assertive">
+          <div className="desktop-only-blocker-card">
+            <strong>Desktop View Required</strong>
+            <p>
+              Please open this website on a desktop or larger screen. Some features are only available in desktop view,
+              and mobile screens are not interactive enough for this experience.
+            </p>
+          </div>
+        </div>
         <SiteHeader />
         {children}
       </body>
